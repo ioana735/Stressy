@@ -1,0 +1,2 @@
+# Pune aici sprite sheet-urile: idle.png, focus.png, sleep.png, happy.png, tired.png
+# Pana atunci, Stressy e desenat procedural (vezi lib/game/components/stressy_component.dart).
