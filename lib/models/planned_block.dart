@@ -15,6 +15,8 @@ class PlannedBlock {
   final String? unitLabel; // ex. "pagini"
   final int doneUnits; // cat ai facut din tinta
   final bool done; // bifare manuala
+  final bool fromGoal; // generat automat dintr-un obiectiv saptamanal
+  final String? examId; // legat de un examen (generat automat)
 
   const PlannedBlock({
     required this.id,
@@ -26,6 +28,8 @@ class PlannedBlock {
     this.unitLabel,
     this.doneUnits = 0,
     this.done = false,
+    this.fromGoal = false,
+    this.examId,
   });
 
   bool get hasTarget => targetUnits != null && targetUnits! > 0;
@@ -48,6 +52,8 @@ class PlannedBlock {
     String? unitLabel,
     int? doneUnits,
     bool? done,
+    bool? fromGoal,
+    String? examId,
   }) =>
       PlannedBlock(
         id: id,
@@ -59,6 +65,8 @@ class PlannedBlock {
         unitLabel: unitLabel ?? this.unitLabel,
         doneUnits: doneUnits ?? this.doneUnits,
         done: done ?? this.done,
+        fromGoal: fromGoal ?? this.fromGoal,
+        examId: examId ?? this.examId,
       );
 
   Map<String, dynamic> toJson() => {
@@ -71,6 +79,8 @@ class PlannedBlock {
         'unitLabel': unitLabel,
         'doneUnits': doneUnits,
         'done': done,
+        'fromGoal': fromGoal,
+        'examId': examId,
       };
 
   factory PlannedBlock.fromJson(Map<String, dynamic> j) => PlannedBlock(
@@ -83,5 +93,7 @@ class PlannedBlock {
         unitLabel: j['unitLabel'] as String?,
         doneUnits: (j['doneUnits'] as num?)?.toInt() ?? 0,
         done: j['done'] as bool? ?? false,
+        fromGoal: j['fromGoal'] as bool? ?? false,
+        examId: j['examId'] as String?,
       );
 }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../logic/plan_service.dart';
-import '../logic/study_timer.dart';
+import '../logic/session_runner.dart';
 import '../state/tracker_provider.dart';
 import '../theme/silk.dart';
+import 'settings_screen.dart';
 import '../widgets/goal_ring.dart';
 import '../widgets/plan_block_tile.dart';
 import '../widgets/weekly_chart.dart';
@@ -17,72 +19,148 @@ class DashboardView extends ConsumerStatefulWidget {
 }
 
 class _DashboardViewState extends ConsumerState<DashboardView> {
-  StudyTimer? _timer;
-  Duration _remaining = const Duration(minutes: 25);
+  SessionRunner? _runner;
+  String? _subject;
+  int _segStartSec = 0; // secunde lucrate la inceputul segmentului materiei curente
   bool _running = false;
+  SessionPhase _phase = SessionPhase.work;
+  int _displaySec = 0;
 
   @override
   void dispose() {
-    _timer?.dispose();
+    _runner?.dispose();
     super.dispose();
   }
 
-  /// Cere materia (optional), apoi porneste cronometrul.
-  Future<void> _promptStart() async {
-    final result = await showModalBottomSheet<_SessionInput>(
+  List<String> _todaySubjects() {
+    final blocks = PlanService.blocksForDay(
+        ref.read(trackerControllerProvider).blocks, DateTime.now());
+    final seen = <String>{};
+    final out = <String>[];
+    for (final b in blocks) {
+      if (seen.add(b.subject.toLowerCase())) out.add(b.subject);
+    }
+    return out;
+  }
+
+  /// Un singur flux: alegi materia (din task-urile de azi sau liber) + durata
+  /// + modul, plus pauze optionale.
+  Future<void> _openSession() async {
+    final cfg = await showModalBottomSheet<_SessionInput>(
       context: context,
       backgroundColor: Silk.bg,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (_) => const _SessionSheet(forTimer: true),
+      builder: (_) => _SessionSheet(todaySubjects: _todaySubjects()),
     );
-    if (result != null) _startTimer(result.subject);
+    if (cfg == null) return;
+    if (cfg.mode == _SessionMode.manual) {
+      await ref
+          .read(trackerControllerProvider.notifier)
+          .logSession(cfg.minutes, subject: cfg.subject);
+      if (mounted) _toast('Sesiune salvată: ${_fmtMin(cfg.minutes)} ✅');
+      return;
+    }
+    _startRunner(cfg);
   }
 
-  void _startTimer(String? subject) {
-    _timer = StudyTimer(
-      sessionMinutes: 25,
-      onStart: () => setState(() => _running = true),
-      onTick: (r) => setState(() => _remaining = r),
-      onComplete: (mins) async {
-        await ref
-            .read(trackerControllerProvider.notifier)
-            .logSession(mins, subject: subject);
-        setState(() {
-          _running = false;
-          _remaining = const Duration(minutes: 25);
-        });
-        if (mounted) _toast('Sesiune salvată: $mins min 🎉');
-      },
-      onAbort: () => setState(() {
-        _running = false;
-        _remaining = const Duration(minutes: 25);
+  /// Inregistreaza timpul segmentului curent (materia curenta) si muta reperul.
+  Future<void> _logSegment() async {
+    final r = _runner;
+    if (r == null) return;
+    final segMin = ((r.workedSeconds - _segStartSec) / 60).round();
+    _segStartSec = r.workedSeconds;
+    if (segMin >= 1) {
+      await ref
+          .read(trackerControllerProvider.notifier)
+          .logSession(segMin, subject: _subject);
+    }
+  }
+
+  /// Comuta materia din mers, fara sa opreasca sesiunea.
+  Future<void> _switchSubject() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Silk.bg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (_) => _SubjectPickerSheet(
+          todaySubjects: _todaySubjects(), current: _subject),
+    );
+    if (picked == null) return;
+    await _logSegment(); // salveaza timpul de pana acum la materia veche
+    setState(() => _subject = picked.isEmpty ? null : picked);
+    if (mounted) {
+      _toast('Acum studiezi: ${_subject ?? "general"} 📚');
+    }
+  }
+
+  void _startRunner(_SessionInput cfg) {
+    _subject = cfg.subject;
+    _segStartSec = 0;
+    _runner = SessionRunner(
+      stopwatch: cfg.mode == _SessionMode.stopwatch,
+      targetWorkSeconds: cfg.minutes * 60,
+      breaksEnabled: cfg.breaks,
+      workBlockSeconds: cfg.workBlock * 60,
+      breakBlockSeconds: cfg.breakBlock * 60,
+      onTick: (phase, disp) => setState(() {
+        _phase = phase;
+        _displaySec = disp;
       }),
+      onPhaseChange: (newPhase) {
+        HapticFeedback.mediumImpact();
+        final onBreak = newPhase == SessionPhase.breakTime;
+        final title = onBreak ? 'Pauză! ☕' : 'Pauza s-a încheiat 📚';
+        final body = onBreak
+            ? 'Odihnește-te puțin.'
+            : 'Înapoi la treabă — hai că poți!';
+        ref.read(notificationProvider).showNow(title, body);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor:
+                onBreak ? const Color(0xFFF2A93B) : Silk.primary,
+            content: Text(onBreak
+                ? '☕ Pauză! Odihnește-te.'
+                : '📚 Pauza s-a încheiat — înapoi la treabă!'),
+          ));
+        }
+      },
+      onFinish: (workedMin) async {
+        await _logSegment(); // salveaza ultimul segment
+        setState(() => _running = false);
+        if (mounted) _toast('Sesiune terminată! 🎉 (${_fmtMin(workedMin)})');
+      },
     )..start();
+    setState(() {
+      _running = true;
+      _phase = SessionPhase.work;
+    });
   }
 
-  void _stopTimer() => _timer?.abort();
+  Future<void> _stopRunner() async {
+    final total = _runner?.workedMinutes ?? 0;
+    await _logSegment(); // salveaza segmentul curent
+    _runner?.stop();
+    setState(() => _running = false);
+    if (mounted && total >= 1) {
+      _toast('Sesiune salvată: ${_fmtMin(total)} ✅');
+    }
+  }
+
+  String _fmtMin(int m) {
+    final h = m ~/ 60;
+    final mm = m % 60;
+    if (h > 0 && mm > 0) return '${h}h ${mm}min';
+    if (h > 0) return '${h}h';
+    return '${mm}min';
+  }
 
   void _toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
-
-  Future<void> _addManual() async {
-    final result = await showModalBottomSheet<_SessionInput>(
-      context: context,
-      backgroundColor: Silk.bg,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (_) => const _SessionSheet(forTimer: false),
-    );
-    if (result != null && result.minutes > 0) {
-      await ref
-          .read(trackerControllerProvider.notifier)
-          .logSession(result.minutes, subject: result.subject);
-      if (mounted) _toast('Adăugat: ${result.minutes} min');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -112,15 +190,17 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                         fontWeight: FontWeight.w700,
                         color: Silk.primary)),
               ]),
-              const Neu(
-                  padding: EdgeInsets.all(10),
+              Neu(
+                  padding: const EdgeInsets.all(10),
                   radius: 16,
                   small: true,
-                  child: Icon(Icons.settings_rounded,
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const SettingsPage())),
+                  child: const Icon(Icons.settings_rounded,
                       color: Silk.onSurfaceVar, size: 20)),
             ],
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           // inel obiectiv
           Center(
             child: GoalRing(
@@ -128,7 +208,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
               goalMinutes: state.goal,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
           Center(
             child: Text(
               state.goalReached
@@ -139,7 +219,45 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                   fontSize: 15, color: Silk.onSurfaceVar, height: 1.4),
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 22),
+          // buton principal (sus) — deschide alegerea modului; STOP cand ruleaza
+          _SessionButton(
+            running: _running,
+            onBreak: _phase == SessionPhase.breakTime,
+            timeLabel: SessionRunner.fmt(_displaySec),
+            onStart: _openSession,
+            onStop: _stopRunner,
+          ),
+          if (_running) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: _switchSubject,
+              child: Neu(
+                small: true,
+                radius: 16,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.menu_book_rounded,
+                        color: Silk.primary, size: 18),
+                    const SizedBox(width: 8),
+                    Text('Studiezi: ${_subject ?? "general"}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Silk.onSurface)),
+                    const SizedBox(width: 8),
+                    const Text('• Schimbă',
+                        style: TextStyle(
+                            color: Silk.primary,
+                            fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 26),
           // carduri
           Row(
             children: [
@@ -185,40 +303,6 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
           ),
           // --- Azi ai de făcut (plan) ---
           _TodayPlan(),
-          const SizedBox(height: 28),
-          // buton principal
-          NeuButton(
-            filled: !_running,
-            onTap: _running ? _stopTimer : _promptStart,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(_running ? Icons.stop_rounded : Icons.timer_outlined,
-                    color: _running ? Silk.primary : Colors.white, size: 22),
-                const SizedBox(width: 12),
-                Text(
-                  _running
-                      ? 'STOP  •  ${StudyTimer.format(_remaining)}'
-                      : 'START STUDY SESSION',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: _running ? Silk.primary : Colors.white,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: TextButton(
-              onPressed: _addManual,
-              child: Text('+ Adaugă sesiune manual',
-                  style: TextStyle(
-                      color: Silk.primary, fontWeight: FontWeight.w600)),
-            ),
-          ),
         ],
       ),
     );
@@ -242,7 +326,17 @@ class _TodayPlan extends ConsumerWidget {
     final blocks = PlanService.blocksForDay(state.blocks, now);
     if (blocks.isEmpty) return const SizedBox.shrink();
 
-    final doneCount = blocks.where((b) => b.isComplete).length;
+    bool blockDone(b) {
+      if (b.isComplete) return true;
+      if (!b.hasTarget && b.plannedMinutes > 0) {
+        return PlanService.minutesForSubjectOnDay(
+                state.sessions, b.subject, now) >=
+            b.plannedMinutes;
+      }
+      return false;
+    }
+
+    final doneCount = blocks.where(blockDone).length;
 
     return Padding(
       padding: const EdgeInsets.only(top: 20),
@@ -266,10 +360,87 @@ class _TodayPlan extends ConsumerWidget {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: PlanBlockTile(
                     block: b,
+                    studiedMinutes: PlanService.minutesForSubjectOnDay(
+                        state.sessions, b.subject, now),
                     onToggleDone: () => ctrl.toggleBlockDone(b),
                     onUnitDelta: (d) => ctrl.changeBlockUnits(b, d),
                   ),
                 )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Selector de obiectiv zilnic (in ore), direct pe Dashboard.
+/// Butonul principal de sesiune. Verde/indigo la start, roșu STOP la lucru,
+/// portocaliu „PAUZĂ" în timpul pauzei.
+class _SessionButton extends StatelessWidget {
+  final bool running;
+  final bool onBreak;
+  final String timeLabel;
+  final VoidCallback onStart;
+  final VoidCallback onStop;
+
+  const _SessionButton({
+    required this.running,
+    required this.onBreak,
+    required this.timeLabel,
+    required this.onStart,
+    required this.onStop,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!running) {
+      return NeuButton(
+        filled: true,
+        onTap: onStart,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
+            SizedBox(width: 10),
+            Text('ÎNCEPE SĂ ÎNVEȚI',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: 0.5)),
+          ],
+        ),
+      );
+    }
+    final color = onBreak ? const Color(0xFFF2A93B) : const Color(0xFFE5484D);
+    return GestureDetector(
+      onTap: onStop,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+                color: color.withValues(alpha: 0.4),
+                offset: const Offset(0, 6),
+                blurRadius: 14),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(onBreak ? Icons.coffee_rounded : Icons.stop_rounded,
+                color: Colors.white, size: 24),
+            const SizedBox(width: 10),
+            Text(
+              onBreak ? 'PAUZĂ • $timeLabel' : 'STOP • $timeLabel',
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 0.5),
+            ),
           ],
         ),
       ),
@@ -287,22 +458,30 @@ class _MiniStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Neu(
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      child: Column(
+      small: true,
+      radius: 18,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 24)),
-          const SizedBox(height: 8),
-          Text(label,
-              style: const TextStyle(
-                  color: Silk.onSurfaceVar,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
-          const SizedBox(height: 2),
-          Text(value,
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Silk.onSurface)),
+          Text(emoji, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      color: Silk.onSurfaceVar,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500)),
+              Text(value,
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Silk.onSurface)),
+            ],
+          ),
         ],
       ),
     );
@@ -354,27 +533,24 @@ class _DurStepper extends StatelessWidget {
   }
 }
 
-/// Rezultatul bottom sheet-ului: durata + materia.
+enum _SessionMode { timer, stopwatch, manual }
+
+/// Configurarea sesiunii aleasa in sheet.
 class _SessionInput {
-  final int minutes;
+  final int minutes; // target (timer) sau durata logata (manual)
   final String? subject;
-  const _SessionInput(this.minutes, this.subject);
+  final _SessionMode mode;
+  final bool breaks;
+  final int workBlock; // minute de lucru intre pauze
+  final int breakBlock; // minute de pauza
+  const _SessionInput(this.minutes, this.subject, this.mode,
+      this.breaks, this.workBlock, this.breakBlock);
 }
 
-/// Materii sugerate (chip-uri rapide).
-const _subjectSuggestions = [
-  'Matematică',
-  'Programare',
-  'Citit',
-  'Limbi străine',
-  'Examen',
-  'Proiect',
-];
-
+/// Sheet unic: materie + mod (timer/cronometru/fără) + durata + pauze.
 class _SessionSheet extends StatefulWidget {
-  /// true = inainte de cronometru (nu cere minute); false = adaugare manuala.
-  final bool forTimer;
-  const _SessionSheet({required this.forTimer});
+  final List<String> todaySubjects;
+  const _SessionSheet({this.todaySubjects = const []});
 
   @override
   State<_SessionSheet> createState() => _SessionSheetState();
@@ -382,6 +558,10 @@ class _SessionSheet extends StatefulWidget {
 
 class _SessionSheetState extends State<_SessionSheet> {
   int _minutes = 30;
+  _SessionMode _mode = _SessionMode.timer;
+  bool _breaks = false;
+  int _workBlock = 25;
+  int _breakBlock = 5;
   final _subjectCtrl = TextEditingController();
 
   @override
@@ -392,8 +572,14 @@ class _SessionSheetState extends State<_SessionSheet> {
 
   void _submit() {
     final subject = _subjectCtrl.text.trim();
-    Navigator.of(context).pop(
-        _SessionInput(_minutes, subject.isEmpty ? null : subject));
+    Navigator.of(context).pop(_SessionInput(
+      _minutes,
+      subject.isEmpty ? null : subject,
+      _mode,
+      _mode == _SessionMode.manual ? false : _breaks,
+      _workBlock,
+      _breakBlock,
+    ));
   }
 
   String _fmtDur(int m) {
@@ -406,6 +592,263 @@ class _SessionSheetState extends State<_SessionSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final showDuration = _mode != _SessionMode.stopwatch;
+    final showBreaks = _mode != _SessionMode.manual;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 28),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SheetHeader('Sesiune de studiu'),
+            const SizedBox(height: 22),
+
+            // materie
+            _label('MATERIE (opțional)'),
+            const SizedBox(height: 8),
+            NeuInset(
+              radius: 16,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: TextField(
+                controller: _subjectCtrl,
+                decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    hintText: 'ex. Matematică, Programare...'),
+              ),
+            ),
+            if (widget.todaySubjects.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              const Text('Din planul de azi:',
+                  style: TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: widget.todaySubjects
+                    .map((s) => GestureDetector(
+                          onTap: () => setState(() {
+                            _subjectCtrl.text = s;
+                          }),
+                          child: Neu(
+                            small: true,
+                            radius: 12,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            child: Text(s,
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: _subjectCtrl.text == s
+                                        ? Silk.primary
+                                        : Silk.onSurfaceVar)),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+            const SizedBox(height: 20),
+
+            // mod
+            _label('CUM VREI SĂ ÎNVEȚI?'),
+            const SizedBox(height: 8),
+            _modeRow(
+                _SessionMode.timer, '⏳', 'Timer',
+                'Numărătoare inversă până termini timpul ales'),
+            _modeRow(_SessionMode.stopwatch, '⏱️', 'Cronometru',
+                'Numără în sus — te oprești când vrei'),
+
+            if (showDuration) ...[
+              const SizedBox(height: 16),
+              _label(_mode == _SessionMode.manual ? 'CÂT AI STUDIAT?' : 'CÂT TIMP?'),
+              const SizedBox(height: 6),
+              Center(
+                child: Text(_fmtDur(_minutes),
+                    style: const TextStyle(
+                        fontSize: 24, fontWeight: FontWeight.w800)),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                      child: _DurStepper(
+                    label: 'Ore',
+                    onMinus: () => setState(
+                        () => _minutes = (_minutes - 60).clamp(5, 1440)),
+                    onPlus: () => setState(
+                        () => _minutes = (_minutes + 60).clamp(5, 1440)),
+                  )),
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: _DurStepper(
+                    label: 'Minute',
+                    onMinus: () => setState(
+                        () => _minutes = (_minutes - 5).clamp(5, 1440)),
+                    onPlus: () => setState(
+                        () => _minutes = (_minutes + 5).clamp(5, 1440)),
+                  )),
+                ],
+              ),
+            ],
+
+            // pauze
+            if (showBreaks) ...[
+              const SizedBox(height: 16),
+              Neu(
+                small: true,
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text('Pauze',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Silk.onSurface)),
+                        ),
+                        Switch(
+                          value: _breaks,
+                          activeThumbColor: Colors.white,
+                          activeTrackColor: Silk.primary,
+                          onChanged: (v) => setState(() => _breaks = v),
+                        ),
+                      ],
+                    ),
+                    if (_breaks) ...[
+                      const Divider(color: Color(0x11000000)),
+                      const SizedBox(height: 6),
+                      _breakRow('Lucrezi', _workBlock,
+                          (d) => setState(() =>
+                              _workBlock = (_workBlock + d).clamp(5, 120))),
+                      const SizedBox(height: 10),
+                      _breakRow('Pauză', _breakBlock,
+                          (d) => setState(() =>
+                              _breakBlock = (_breakBlock + d).clamp(1, 60))),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 24),
+            NeuButton(
+              filled: true,
+              onTap: _submit,
+              child: Text(
+                  _mode == _SessionMode.manual
+                      ? 'Salvează'
+                      : 'Începe sesiunea',
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _label(String t) => Text(t,
+      style: const TextStyle(
+          fontSize: 11,
+          letterSpacing: 1,
+          fontWeight: FontWeight.w800,
+          color: Silk.onSurfaceVar));
+
+  Widget _modeRow(_SessionMode m, String emoji, String title, String desc) {
+    final selected = _mode == m;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: () => setState(() => _mode = m),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected ? Silk.primary.withValues(alpha: 0.12) : Silk.bg,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: selected ? null : Silk.raisedSoft(),
+            border: selected ? Border.all(color: Silk.primary, width: 1.5) : null,
+          ),
+          child: Row(
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 20)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: selected ? Silk.primary : Silk.onSurface)),
+                    Text(desc,
+                        style: const TextStyle(
+                            fontSize: 11, color: Silk.onSurfaceVar)),
+                  ],
+                ),
+              ),
+              if (selected)
+                const Icon(Icons.check_circle, color: Silk.primary, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _breakRow(String label, int value, ValueChanged<int> onDelta) {
+    return Row(
+      children: [
+        Expanded(
+            child: Text(label,
+                style: const TextStyle(color: Silk.onSurfaceVar))),
+        NeuButton(
+          padding: const EdgeInsets.all(8),
+          radius: 10,
+          onTap: () => onDelta(label == 'Pauză' ? -1 : -5),
+          child: const Icon(Icons.remove, color: Silk.primary, size: 16),
+        ),
+        SizedBox(
+            width: 60,
+            child: Text('$value min',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w800))),
+        NeuButton(
+          padding: const EdgeInsets.all(8),
+          radius: 10,
+          onTap: () => onDelta(label == 'Pauză' ? 1 : 5),
+          child: const Icon(Icons.add, color: Silk.primary, size: 16),
+        ),
+      ],
+    );
+  }
+}
+
+/// Sheet pentru a comuta materia in timpul sesiunii (din task-urile de azi
+/// sau scriind liber).
+class _SubjectPickerSheet extends StatefulWidget {
+  final List<String> todaySubjects;
+  final String? current;
+  const _SubjectPickerSheet({required this.todaySubjects, this.current});
+
+  @override
+  State<_SubjectPickerSheet> createState() => _SubjectPickerSheetState();
+}
+
+class _SubjectPickerSheetState extends State<_SubjectPickerSheet> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
           24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 28),
@@ -413,104 +856,60 @@ class _SessionSheetState extends State<_SessionSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Text(
-                widget.forTimer ? 'Ce studiezi?' : 'Adaugă sesiune',
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Silk.onSurface)),
-          ),
-          const SizedBox(height: 22),
-
-          // câmp materie
-          const Text('MATERIE (opțional)',
-              style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.w800,
-                  color: Silk.onSurfaceVar)),
+          const SheetHeader('Pe ce comuți?'),
+          const SizedBox(height: 20),
+          if (widget.todaySubjects.isNotEmpty) ...[
+            const Text('Task-urile de azi:',
+                style: TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
+            const SizedBox(height: 10),
+            ...widget.todaySubjects.map((s) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).pop(s),
+                    child: Neu(
+                      small: true,
+                      radius: 14,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.menu_book_rounded,
+                              color: Silk.primary, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                              child: Text(s,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      color: Silk.onSurface))),
+                          if (widget.current?.toLowerCase() == s.toLowerCase())
+                            const Text('acum',
+                                style: TextStyle(
+                                    fontSize: 12, color: Silk.onSurfaceVar)),
+                        ],
+                      ),
+                    ),
+                  ),
+                )),
+            const SizedBox(height: 12),
+          ],
+          const Text('Sau scrie o materie:',
+              style: TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
           const SizedBox(height: 8),
           NeuInset(
             radius: 16,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: TextField(
-              controller: _subjectCtrl,
+              controller: _ctrl,
               decoration: const InputDecoration(
-                border: InputBorder.none,
-                hintText: 'ex. Matematică, Programare...',
-              ),
+                  border: InputBorder.none, hintText: 'ex. Română'),
+              onSubmitted: (v) =>
+                  Navigator.of(context).pop(v.trim()),
             ),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _subjectSuggestions
-                .map((s) => GestureDetector(
-                      onTap: () => setState(() {
-                        _subjectCtrl.text = s;
-                      }),
-                      child: Neu(
-                        small: true,
-                        radius: 12,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        child: Text(s,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: Silk.onSurfaceVar,
-                                fontWeight: FontWeight.w600)),
-                      ),
-                    ))
-                .toList(),
-          ),
-
-          // selector durata (ore + minute, doar la adaugare manuala)
-          if (!widget.forTimer) ...[
-            const SizedBox(height: 22),
-            const Text('DURATĂ',
-                style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w800,
-                    color: Silk.onSurfaceVar)),
-            const SizedBox(height: 6),
-            Center(
-              child: Text(_fmtDur(_minutes),
-                  style: const TextStyle(
-                      fontSize: 26, fontWeight: FontWeight.w800)),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                    child: _DurStepper(
-                  label: 'Ore',
-                  onMinus: () =>
-                      setState(() => _minutes = (_minutes - 60).clamp(5, 1440)),
-                  onPlus: () =>
-                      setState(() => _minutes = (_minutes + 60).clamp(5, 1440)),
-                )),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: _DurStepper(
-                  label: 'Minute',
-                  onMinus: () =>
-                      setState(() => _minutes = (_minutes - 5).clamp(5, 1440)),
-                  onPlus: () =>
-                      setState(() => _minutes = (_minutes + 5).clamp(5, 1440)),
-                )),
-              ],
-            ),
-          ],
-
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
           NeuButton(
             filled: true,
-            onTap: _submit,
-            child: Text(widget.forTimer ? 'Începe sesiunea' : 'Salvează',
-                style: const TextStyle(
+            onTap: () => Navigator.of(context).pop(_ctrl.text.trim()),
+            child: const Text('Comută',
+                style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: Colors.white)),

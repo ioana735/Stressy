@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../logic/stats_service.dart';
+import '../models/exam.dart';
 import '../models/study_session.dart';
 import '../state/tracker_provider.dart';
 import '../theme/silk.dart';
+import '../widgets/result_celebration.dart';
 
 class StatsView extends ConsumerWidget {
   const StatsView({super.key});
@@ -28,6 +30,14 @@ class StatsView extends ConsumerWidget {
       if (b == null || tot > b.value) return MapEntry(e.key, tot);
       return b;
     });
+
+    // promovabilitate (doar examene marcate)
+    final decided =
+        state.exams.where((e) => e.result != ExamResult.pending).toList();
+    final passed =
+        decided.where((e) => e.result == ExamResult.passed).length;
+    final passRate =
+        decided.isEmpty ? 0 : (passed / decided.length * 100).round();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
@@ -73,6 +83,38 @@ class StatsView extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 24),
+
+        // --- Promovabilitate ---
+        if (decided.isNotEmpty) ...[
+          _PassRateCard(
+            passRate: passRate,
+            passed: passed,
+            total: decided.length,
+          ),
+          const SizedBox(height: 24),
+        ],
+
+        // --- Rezultate examene ---
+        if (state.exams.isNotEmpty) ...[
+          const Text('Examenele mele',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          ...([...state.exams]..sort((a, b) => b.dateTime.compareTo(a.dateTime)))
+              .map((e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _ExamResultTile(
+                      exam: e,
+                      onSet: (r) async {
+                        await ctrl.setExamResult(e, r);
+                        if (context.mounted && r != ExamResult.pending) {
+                          await showResultCelebration(context,
+                              passed: r == ExamResult.passed);
+                        }
+                      },
+                    ),
+                  )),
+          const SizedBox(height: 24),
+        ],
 
         if (sessions.isEmpty)
           const Padding(
@@ -180,6 +222,183 @@ class StatsView extends ConsumerWidget {
     if (diff == 0) return 'Azi';
     if (diff == 1) return 'Ieri';
     return '${d.day}.${d.month}.${d.year}';
+  }
+}
+
+/// Card cu rata de promovare (câte examene ai trecut din cele susținute).
+class _PassRateCard extends StatelessWidget {
+  final int passRate;
+  final int passed;
+  final int total;
+  const _PassRateCard(
+      {required this.passRate, required this.passed, required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    final good = passRate >= 50;
+    final color = good ? Silk.success : const Color(0xFFE5748A);
+    final msg = passRate == 100
+        ? 'Perfect! Le-ai trecut pe toate. 🏆'
+        : good
+            ? 'Bravo! Te descurci bine. 💪'
+            : 'Nu renunța — urmează mai bine. 💜';
+
+    return Neu(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: const [
+            Icon(Icons.emoji_events_rounded, size: 18, color: Silk.primary),
+            SizedBox(width: 8),
+            Text('PROMOVABILITATE',
+                style: TextStyle(
+                    fontSize: 12,
+                    letterSpacing: 1,
+                    fontWeight: FontWeight.w800,
+                    color: Silk.primary)),
+          ]),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('$passRate%',
+                  style: TextStyle(
+                      fontSize: 44,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                      height: 1)),
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text('$passed din $total examene',
+                    style: const TextStyle(
+                        fontSize: 14, color: Silk.onSurfaceVar)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: total == 0 ? 0 : passed / total,
+              minHeight: 10,
+              backgroundColor: const Color(0xFFDDE0E8),
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(msg,
+              style: const TextStyle(
+                  fontSize: 13, color: Silk.onSurfaceVar)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExamResultTile extends StatelessWidget {
+  final Exam exam;
+  final ValueChanged<ExamResult> onSet;
+  const _ExamResultTile({required this.exam, required this.onSet});
+
+  @override
+  Widget build(BuildContext context) {
+    final passed = exam.result == ExamResult.passed;
+    final failed = exam.result == ExamResult.failed;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(passed ? '🏆' : (failed ? '🌱' : '🎓'),
+                  style: const TextStyle(fontSize: 24)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(exam.name,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Silk.onSurface)),
+                    Text(
+                        '${exam.dateTime.day}.${exam.dateTime.month}.${exam.dateTime.year}',
+                        style: const TextStyle(
+                            fontSize: 12, color: Silk.onSurfaceVar)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _ResultBtn(
+                  label: 'Am trecut',
+                  emoji: '✅',
+                  selected: passed,
+                  color: Silk.success,
+                  onTap: () => onSet(ExamResult.passed),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ResultBtn(
+                  label: 'N-am trecut',
+                  emoji: '💪',
+                  selected: failed,
+                  color: const Color(0xFFE5748A),
+                  onTap: () => onSet(ExamResult.failed),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResultBtn extends StatelessWidget {
+  final String label;
+  final String emoji;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+  const _ResultBtn({
+    required this.label,
+    required this.emoji,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? color : const Color(0xFFF1F2F6),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text('$emoji  $label',
+            style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: selected ? Colors.white : Silk.onSurfaceVar)),
+      ),
+    );
   }
 }
 

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../theme/silk.dart';
 import 'home_screen.dart';
 import 'plan_screen.dart';
-import 'settings_screen.dart';
 import 'stats_screen.dart';
 
 class RootScreen extends StatefulWidget {
@@ -20,7 +19,6 @@ class _RootScreenState extends State<RootScreen> {
     DashboardView(),
     PlanView(),
     StatsView(),
-    SettingsView(),
   ];
 
   @override
@@ -48,7 +46,6 @@ class _BottomNav extends StatelessWidget {
     (Icons.dashboard_rounded, 'Dashboard'),
     (Icons.event_note_rounded, 'Plan'),
     (Icons.history_rounded, 'Stats'),
-    (Icons.tune_rounded, 'Settings'),
   ];
 
   @override

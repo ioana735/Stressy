@@ -3,29 +3,44 @@ import 'package:flutter/material.dart';
 import '../models/planned_block.dart';
 import '../theme/silk.dart';
 
-/// Afiseaza un task planificat: bifa + titlu + notita + tinta cantitativa
-/// (ex. pagini) cu +/-. Fara bare de progres.
+/// Afiseaza un task planificat.
+///  - Task cu TINTA cantitativa (pagini/seminarii): stepper manual +/-.
+///  - Task cu TIMP estimat: progres AUTOMAT din minutele studiate azi la materie.
+///  - Altfel: simplu de bifat manual.
 class PlanBlockTile extends StatelessWidget {
   final PlannedBlock block;
+
+  /// Minute studiate azi la materia acestui task (din sesiuni). Umple automat
+  /// task-urile bazate pe timp.
+  final int studiedMinutes;
+
   final VoidCallback onToggleDone;
   final ValueChanged<int> onUnitDelta;
-  final bool compact;
 
   const PlanBlockTile({
     super.key,
     required this.block,
     required this.onToggleDone,
     required this.onUnitDelta,
-    this.compact = false,
+    this.studiedMinutes = 0,
   });
+
+  bool get _quantityMode => block.hasTarget;
+  bool get _timeMode => !_quantityMode && block.plannedMinutes > 0;
+
+  bool get _complete {
+    if (block.done) return true;
+    if (_quantityMode) return block.doneUnits >= block.targetUnits!;
+    if (_timeMode) return studiedMinutes >= block.plannedMinutes;
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final complete = block.isComplete;
+    final complete = _complete;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // bifa
         GestureDetector(
           onTap: onToggleDone,
           behavior: HitTestBehavior.opaque,
@@ -39,7 +54,6 @@ class PlanBlockTile extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        // continut
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,7 +71,14 @@ class PlanBlockTile extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (block.plannedMinutes > 0)
+                  // dreapta: pentru task pe timp arata studiat/estimat
+                  if (_timeMode)
+                    Text('${_dur(studiedMinutes)} / ${_dur(block.plannedMinutes)}',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: complete ? Silk.success : Silk.primary))
+                  else if (block.plannedMinutes > 0)
                     Text(_dur(block.plannedMinutes),
                         style: const TextStyle(
                             fontSize: 12,
@@ -72,8 +93,31 @@ class PlanBlockTile extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 12, color: Silk.onSurfaceVar)),
                 ),
-              // tinta cantitativa cu +/-
-              if (block.hasTarget) ...[
+
+              // task pe TIMP -> bara de progres automata
+              if (_timeMode) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: (studiedMinutes / block.plannedMinutes)
+                        .clamp(0.0, 1.0),
+                    minHeight: 7,
+                    backgroundColor: const Color(0xFFDDE0E8),
+                    valueColor: AlwaysStoppedAnimation(
+                        complete ? Silk.success : Silk.primary),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text('se umple automat când studiezi materia',
+                      style: TextStyle(
+                          fontSize: 10, color: Silk.onSurfaceVar)),
+                ),
+              ],
+
+              // task cu TINTA cantitativa -> stepper manual
+              if (_quantityMode) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [

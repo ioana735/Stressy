@@ -12,6 +12,35 @@ class PlanService {
     return day.subtract(Duration(days: day.weekday - 1));
   }
 
+  /// Sfarsitul saptamanii (duminica) care contine [d].
+  static DateTime weekEnd(DateTime d) =>
+      weekStart(d).add(const Duration(days: 6));
+
+  /// Genereaza cate un bloc de [minutesPerDay] pentru fiecare zi din [from]
+  /// pana la [to] inclusiv. Legat de [examId]. Blocuri pe timp (auto-fill).
+  static List<PlannedBlock> generateDailyPlan({
+    required String subject,
+    required int minutesPerDay,
+    required DateTime from,
+    required DateTime to,
+    required int idSeed,
+    required String examId,
+  }) {
+    final start = StatsService.dayOnly(from);
+    final end = StatsService.dayOnly(to);
+    final days = end.difference(start).inDays + 1;
+    if (days <= 0 || minutesPerDay <= 0) return [];
+    return List.generate(
+        days,
+        (i) => PlannedBlock(
+              id: '${idSeed}_$i',
+              date: start.add(Duration(days: i)),
+              subject: subject,
+              plannedMinutes: minutesPerDay,
+              examId: examId,
+            ));
+  }
+
   static bool _sameSubject(String? a, String b) =>
       (a ?? '').trim().toLowerCase() == b.trim().toLowerCase();
 
@@ -70,6 +99,7 @@ class PlanService {
     required DateTime to,
     required int idSeed,
     StudyStyle style = StudyStyle.spaced,
+    bool fromGoal = false,
   }) {
     final start = StatsService.dayOnly(from);
     final end = StatsService.dayOnly(to);
@@ -100,6 +130,7 @@ class PlanService {
         date: start.add(Duration(days: i)),
         subject: subject,
         plannedMinutes: raw[i],
+        fromGoal: fromGoal,
       ));
     }
     return result;

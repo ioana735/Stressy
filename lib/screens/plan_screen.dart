@@ -183,6 +183,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
                 onDismissed: (_) => ctrl.deleteExam(e),
                 child: Neu(
                   small: true,
+                  onTap: () => _addExamSheet(ctrl, edit: e),
                   child: Row(
                     children: [
                       Container(
@@ -208,7 +209,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
                                     fontWeight: FontWeight.w700,
                                     color: Silk.onSurface)),
                             Text(
-                                '${_fmtDate(e.dateTime)} • ${_fmtTime(e.dateTime)}',
+                                '${e.kindLabel}${e.format != ExamFormat.none ? " • ${e.format.label}" : ""} · ${_fmtDate(e.dateTime)} ${_fmtTime(e.dateTime)}',
                                 style: const TextStyle(
                                     fontSize: 12, color: Silk.onSurfaceVar)),
                           ],
@@ -279,6 +280,8 @@ class _PlanViewState extends ConsumerState<PlanView> {
                   small: true,
                   child: PlanBlockTile(
                     block: b,
+                    studiedMinutes: PlanService.minutesForSubjectOnDay(
+                        state.sessions, b.subject, b.date),
                     onToggleDone: () => ctrl.toggleBlockDone(b),
                     onUnitDelta: (d) => ctrl.changeBlockUnits(b, d),
                   ),
@@ -287,103 +290,6 @@ class _PlanViewState extends ConsumerState<PlanView> {
             );
           }),
 
-        const SizedBox(height: 16),
-        NeuButton(
-          onTap: () => _autoPlanSheet(ctrl),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.auto_awesome, color: Silk.violet, size: 20),
-              SizedBox(width: 10),
-              Text('Generează plan automat',
-                  style: TextStyle(
-                      color: Silk.violet, fontWeight: FontWeight.w700)),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 32),
-        // --- obiective pe materie ---
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('Obiective săptămânale',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w800)),
-            GestureDetector(
-              onTap: () => _goalSheet(ctrl),
-              child: const Row(children: [
-                Icon(Icons.add_circle, color: Silk.primary, size: 20),
-                SizedBox(width: 4),
-                Text('Adaugă',
-                    style: TextStyle(
-                        color: Silk.primary, fontWeight: FontWeight.w700)),
-              ]),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (state.goals.isEmpty)
-          Neu(
-            child: const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('Setează ținte săptămânale pe materie.',
-                    style: TextStyle(color: Silk.onSurfaceVar)),
-              ),
-            ),
-          )
-        else
-          ...state.goals.map((g) {
-            final done = PlanService.weeklyMinutesForSubject(
-                state.sessions, g.subject, now);
-            final frac = (done / g.weeklyMinutes).clamp(0.0, 1.0);
-            final complete = done >= g.weeklyMinutes;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Dismissible(
-                key: ValueKey('goal_${g.subject}'),
-                direction: DismissDirection.endToStart,
-                background: _delBg(),
-                onDismissed: (_) => ctrl.deleteGoal(g),
-                child: Neu(
-                  small: true,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(g.subject,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: Silk.onSurface)),
-                          Text('${_fmt(done)} / ${_fmt(g.weeklyMinutes)}',
-                              style: TextStyle(
-                                  color: complete
-                                      ? Silk.success
-                                      : Silk.onSurfaceVar,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13)),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: frac,
-                          minHeight: 8,
-                          backgroundColor: const Color(0xFFDDE0E8),
-                          valueColor: AlwaysStoppedAnimation(
-                              complete ? Silk.success : Silk.primary),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
       ],
     );
   }
@@ -411,7 +317,8 @@ class _PlanViewState extends ConsumerState<PlanView> {
     if (block != null) ctrl.addBlock(block);
   }
 
-  Future<void> _addExamSheet(TrackerController ctrl) async {
+  /// Adauga sau (daca [edit] != null) editeaza un examen.
+  Future<void> _addExamSheet(TrackerController ctrl, {Exam? edit}) async {
     final exam = await showModalBottomSheet<Exam>(
       context: context,
       backgroundColor: Silk.bg,
@@ -421,76 +328,21 @@ class _PlanViewState extends ConsumerState<PlanView> {
       builder: (_) => _ExamSheet(
           initialDay: _selectedDay,
           initialStyle:
-              ref.read(trackerControllerProvider).settings.studyStyle),
+              ref.read(trackerControllerProvider).settings.studyStyle,
+          existing: edit),
     );
-    if (exam != null) {
+    if (exam == null) return;
+    if (edit != null) {
+      ctrl.updateExam(exam);
+    } else {
       ctrl.addExam(exam);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text(exam.studyHoursTarget != null
-              ? 'Examen + plan de studiu adăugat 📚'
-              : 'Examen adăugat pe calendar.'),
-        ));
-      }
     }
-  }
-
-  Future<void> _goalSheet(TrackerController ctrl) async {
-    final res = await _showSubjectMinutesSheet(
-      title: 'Obiectiv săptămânal',
-      action: 'Salvează obiectiv',
-      minutesLabel: 'PE SĂPTĂMÂNĂ',
-      defaultMinutes: 300,
-      step: 30,
-    );
-    if (res != null) ctrl.setGoal(res.$1, res.$2);
-  }
-
-  Future<void> _autoPlanSheet(TrackerController ctrl) async {
-    final created = await showModalBottomSheet<List<PlannedBlock>>(
-      context: context,
-      backgroundColor: Silk.bg,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (_) => _AutoPlanSheet(
-          startDay: _selectedDay,
-          initialStyle:
-              ref.read(trackerControllerProvider).settings.studyStyle),
-    );
-    if (created != null && created.isNotEmpty) {
-      ctrl.addBlocks(created);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text('Plan generat: ${created.length} zile.'),
-        ));
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(edit != null ? 'Examen actualizat ✏️' : 'Examen adăugat 📅'),
+      ));
     }
-  }
-
-  Future<(String, int)?> _showSubjectMinutesSheet({
-    required String title,
-    required String action,
-    String minutesLabel = 'DURATĂ',
-    int defaultMinutes = 60,
-    int step = 15,
-  }) {
-    return showModalBottomSheet<(String, int)>(
-      context: context,
-      backgroundColor: Silk.bg,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (_) => _SubjectMinutesSheet(
-        title: title,
-        action: action,
-        minutesLabel: minutesLabel,
-        defaultMinutes: defaultMinutes,
-        step: step,
-      ),
-    );
   }
 
   String _fmtDate(DateTime d) => '${d.day}.${d.month}.${d.year}';
@@ -579,30 +431,43 @@ class StyleSelector extends StatelessWidget {
 class _ExamSheet extends StatefulWidget {
   final DateTime initialDay;
   final StudyStyle initialStyle;
-  const _ExamSheet({required this.initialDay, required this.initialStyle});
+  final Exam? existing; // != null => editare
+  const _ExamSheet(
+      {required this.initialDay, required this.initialStyle, this.existing});
   @override
   State<_ExamSheet> createState() => _ExamSheetState();
 }
 
 class _ExamSheetState extends State<_ExamSheet> {
-  final _ctrl = TextEditingController();
-  late DateTime _date = widget.initialDay;
-  TimeOfDay _time = const TimeOfDay(hour: 9, minute: 0);
+  late final _ctrl = TextEditingController(text: widget.existing?.name ?? '');
+  late final _customCtrl =
+      TextEditingController(text: widget.existing?.customLabel ?? '');
+  late DateTime _date =
+      widget.existing?.dateTime ?? widget.initialDay;
+  late TimeOfDay _time = widget.existing != null
+      ? TimeOfDay(
+          hour: widget.existing!.dateTime.hour,
+          minute: widget.existing!.dateTime.minute)
+      : const TimeOfDay(hour: 9, minute: 0);
 
-  bool _autoPlan = false;
-  int _studyHours = 10;
-  late StudyStyle _style = widget.initialStyle;
-  late DateTime _notifyFrom =
+  late ExamKind _kind = widget.existing?.kind ?? ExamKind.examen;
+  late ExamFormat _format = widget.existing?.format ?? ExamFormat.scris;
+
+  late bool _autoPlan = widget.existing?.hoursPerDay != null;
+  late int _hoursPerDay = widget.existing?.hoursPerDay ?? 2;
+  late DateTime _notifyFrom = widget.existing?.notifyFrom ??
       StatsService.dayOnly(DateTime.now());
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _customCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final editing = widget.existing != null;
     return Padding(
       padding: EdgeInsets.fromLTRB(
           24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 28),
@@ -611,20 +476,9 @@ class _ExamSheetState extends State<_ExamSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Center(
-              child: Text('Adaugă examen',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Silk.onSurface)),
-            ),
+            SheetHeader(editing ? 'Editează examen' : 'Adaugă examen'),
             const SizedBox(height: 22),
-            const Text('MATERIE / EXAMEN',
-                style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w800,
-                    color: Silk.onSurfaceVar)),
+            _lbl('MATERIE / NUME'),
             const SizedBox(height: 8),
             NeuInset(
               radius: 16,
@@ -632,8 +486,53 @@ class _ExamSheetState extends State<_ExamSheet> {
               child: TextField(
                 controller: _ctrl,
                 decoration: const InputDecoration(
-                    border: InputBorder.none, hintText: 'ex. Examen Analiză'),
+                    border: InputBorder.none, hintText: 'ex. Analiză Matematică'),
               ),
+            ),
+            const SizedBox(height: 18),
+            // tip
+            _lbl('TIP'),
+            const SizedBox(height: 8),
+            Row(
+              children: ExamKind.values
+                  .map((k) => Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _pill(k.label, _kind == k,
+                              () => setState(() => _kind = k)),
+                        ),
+                      ))
+                  .toList(),
+            ),
+            if (_kind == ExamKind.altele) ...[
+              const SizedBox(height: 8),
+              NeuInset(
+                radius: 14,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                child: TextField(
+                  controller: _customCtrl,
+                  decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Scrie tu (ex. Prezentare, Laborator...)'),
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            // forma
+            _lbl('FORMĂ'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                    child: Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _pill('Scris', _format == ExamFormat.scris,
+                      () => setState(() => _format = ExamFormat.scris)),
+                )),
+                Expanded(
+                    child: _pill('Oral', _format == ExamFormat.oral,
+                        () => setState(() => _format = ExamFormat.oral))),
+              ],
             ),
             const SizedBox(height: 18),
             // data + ora
@@ -645,14 +544,11 @@ class _ExamSheetState extends State<_ExamSheet> {
                       final p = await showDatePicker(
                         context: context,
                         initialDate: _date,
-                        firstDate: DateTime.now()
-                            .subtract(const Duration(days: 1)),
-                        lastDate:
-                            DateTime.now().add(const Duration(days: 730)),
+                        firstDate:
+                            DateTime.now().subtract(const Duration(days: 1)),
+                        lastDate: DateTime.now().add(const Duration(days: 730)),
                       );
-                      if (p != null) {
-                        setState(() => _date = StatsService.dayOnly(p));
-                      }
+                      if (p != null) setState(() => _date = p);
                     },
                     child: _field('DATA',
                         '${_date.day}.${_date.month}.${_date.year}'),
@@ -673,7 +569,7 @@ class _ExamSheetState extends State<_ExamSheet> {
               ],
             ),
             const SizedBox(height: 18),
-            // toggle auto-plan
+            // plan de invatat (ore/zi)
             Neu(
               small: true,
               child: Column(
@@ -681,7 +577,7 @@ class _ExamSheetState extends State<_ExamSheet> {
                   Row(
                     children: [
                       const Expanded(
-                        child: Text('Generează plan de învățat',
+                        child: Text('Fă-mi un plan de învățat',
                             style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 color: Silk.onSurface)),
@@ -699,20 +595,20 @@ class _ExamSheetState extends State<_ExamSheet> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Text('Total ore de studiu:',
+                        const Text('Ore pe zi:',
                             style: TextStyle(color: Silk.onSurfaceVar)),
                         const Spacer(),
                         NeuButton(
                           padding: const EdgeInsets.all(8),
                           radius: 10,
                           onTap: () => setState(() =>
-                              _studyHours = (_studyHours - 1).clamp(1, 300)),
+                              _hoursPerDay = (_hoursPerDay - 1).clamp(1, 16)),
                           child: const Icon(Icons.remove,
                               color: Silk.primary, size: 16),
                         ),
                         SizedBox(
                             width: 48,
-                            child: Text('$_studyHours h',
+                            child: Text('${_hoursPerDay}h',
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                     fontWeight: FontWeight.w800))),
@@ -720,7 +616,7 @@ class _ExamSheetState extends State<_ExamSheet> {
                           padding: const EdgeInsets.all(8),
                           radius: 10,
                           onTap: () => setState(() =>
-                              _studyHours = (_studyHours + 1).clamp(1, 300)),
+                              _hoursPerDay = (_hoursPerDay + 1).clamp(1, 16)),
                           child: const Icon(Icons.add,
                               color: Silk.primary, size: 16),
                         ),
@@ -732,8 +628,8 @@ class _ExamSheetState extends State<_ExamSheet> {
                         final p = await showDatePicker(
                           context: context,
                           initialDate: _notifyFrom,
-                          firstDate: DateTime.now()
-                              .subtract(const Duration(days: 1)),
+                          firstDate:
+                              DateTime.now().subtract(const Duration(days: 1)),
                           lastDate: _date,
                         );
                         if (p != null) {
@@ -741,20 +637,9 @@ class _ExamSheetState extends State<_ExamSheet> {
                               () => _notifyFrom = StatsService.dayOnly(p));
                         }
                       },
-                      child: _field('NOTIFICĂ-MĂ SĂ ÎNVĂȚ DE LA',
+                      child: _field('ÎNCEP SĂ ÎNVĂȚ DIN',
                           '${_notifyFrom.day}.${_notifyFrom.month}.${_notifyFrom.year}'),
                     ),
-                    const SizedBox(height: 14),
-                    const Text('STIL DE ÎNVĂȚARE',
-                        style: TextStyle(
-                            fontSize: 11,
-                            letterSpacing: 1,
-                            fontWeight: FontWeight.w800,
-                            color: Silk.onSurfaceVar)),
-                    const SizedBox(height: 8),
-                    StyleSelector(
-                        value: _style,
-                        onChanged: (s) => setState(() => _style = s)),
                   ],
                 ],
               ),
@@ -767,17 +652,23 @@ class _ExamSheetState extends State<_ExamSheet> {
                 if (name.isEmpty) return;
                 final dt = DateTime(_date.year, _date.month, _date.day,
                     _time.hour, _time.minute);
+                final custom = _customCtrl.text.trim();
                 Navigator.of(context).pop(Exam(
-                  id: DateTime.now().microsecondsSinceEpoch.toString(),
+                  id: widget.existing?.id ??
+                      DateTime.now().microsecondsSinceEpoch.toString(),
                   name: name,
                   dateTime: dt,
+                  kind: _kind,
+                  format: _format,
+                  customLabel: custom.isEmpty ? null : custom,
                   notifyFrom: _notifyFrom,
-                  studyHoursTarget: _autoPlan ? _studyHours : null,
-                  studyStyle: _style,
+                  hoursPerDay: _autoPlan ? _hoursPerDay : null,
+                  studyStyle: widget.initialStyle,
+                  result: widget.existing?.result ?? ExamResult.pending,
                 ));
               },
-              child: const Text('Salvează examenul',
-                  style: TextStyle(
+              child: Text(editing ? 'Salvează modificările' : 'Salvează examenul',
+                  style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Colors.white)),
@@ -787,6 +678,32 @@ class _ExamSheetState extends State<_ExamSheet> {
       ),
     );
   }
+
+  Widget _lbl(String t) => Text(t,
+      style: const TextStyle(
+          fontSize: 11,
+          letterSpacing: 1,
+          fontWeight: FontWeight.w800,
+          color: Silk.onSurfaceVar));
+
+  Widget _pill(String label, bool selected, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? Silk.primary : Silk.bg,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: selected ? null : Silk.raisedSoft(),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: selected ? Colors.white : Silk.onSurfaceVar)),
+        ),
+      );
 
   Widget _field(String label, String value) => Neu(
         small: true,
@@ -842,13 +759,7 @@ class _BlockSheetState extends State<_BlockSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Text('Task — ${widget.dayLabel}',
-                  style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: Silk.onSurface)),
-            ),
+            SheetHeader('Task — ${widget.dayLabel}'),
             const SizedBox(height: 20),
             _label('MATERIE'),
             const SizedBox(height: 8),
@@ -1043,338 +954,3 @@ class _BlockSheetState extends State<_BlockSheet> {
           color: Silk.onSurfaceVar));
 }
 
-/// Sheet reutilizabil: materie + minute (cu +/-).
-class _SubjectMinutesSheet extends StatefulWidget {
-  final String title;
-  final String action;
-  final String minutesLabel;
-  final int defaultMinutes;
-  final int step;
-  const _SubjectMinutesSheet({
-    required this.title,
-    required this.action,
-    required this.minutesLabel,
-    required this.defaultMinutes,
-    required this.step,
-  });
-
-  @override
-  State<_SubjectMinutesSheet> createState() => _SubjectMinutesSheetState();
-}
-
-class _SubjectMinutesSheetState extends State<_SubjectMinutesSheet> {
-  late int _minutes = widget.defaultMinutes;
-  final _ctrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Text(widget.title,
-                style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Silk.onSurface)),
-          ),
-          const SizedBox(height: 22),
-          const Text('MATERIE',
-              style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.w800,
-                  color: Silk.onSurfaceVar)),
-          const SizedBox(height: 8),
-          NeuInset(
-            radius: 16,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: TextField(
-              controller: _ctrl,
-              decoration: const InputDecoration(
-                  border: InputBorder.none, hintText: 'ex. Matematică'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _subjects
-                .map((s) => GestureDetector(
-                      onTap: () => setState(() => _ctrl.text = s),
-                      child: Neu(
-                        small: true,
-                        radius: 12,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        child: Text(s,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: Silk.onSurfaceVar,
-                                fontWeight: FontWeight.w600)),
-                      ),
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: 22),
-          Text(widget.minutesLabel,
-              style: const TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.w800,
-                  color: Silk.onSurfaceVar)),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              NeuButton(
-                padding: const EdgeInsets.all(14),
-                radius: 16,
-                onTap: () => setState(
-                    () => _minutes = (_minutes - widget.step).clamp(5, 1440)),
-                child: const Icon(Icons.remove, color: Silk.primary),
-              ),
-              const SizedBox(width: 24),
-              SizedBox(
-                width: 120,
-                child: Text(_fmt(_minutes),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.w700)),
-              ),
-              const SizedBox(width: 24),
-              NeuButton(
-                padding: const EdgeInsets.all(14),
-                radius: 16,
-                onTap: () => setState(
-                    () => _minutes = (_minutes + widget.step).clamp(5, 1440)),
-                child: const Icon(Icons.add, color: Silk.primary),
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-          NeuButton(
-            filled: true,
-            onTap: () {
-              final subject = _ctrl.text.trim();
-              if (subject.isEmpty) return;
-              Navigator.of(context).pop((subject, _minutes));
-            },
-            child: Text(widget.action,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Sheet pentru generatorul automat de plan.
-class _AutoPlanSheet extends StatefulWidget {
-  final DateTime startDay;
-  final StudyStyle initialStyle;
-  const _AutoPlanSheet({required this.startDay, required this.initialStyle});
-  @override
-  State<_AutoPlanSheet> createState() => _AutoPlanSheetState();
-}
-
-class _AutoPlanSheetState extends State<_AutoPlanSheet> {
-  final _ctrl = TextEditingController();
-  int _totalHours = 10;
-  late StudyStyle _style = widget.initialStyle;
-  late DateTime _from = widget.startDay;
-  late DateTime _to = widget.startDay.add(const Duration(days: 4));
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final days = _to.difference(_from).inDays + 1;
-    final perDay = days > 0 ? (_totalHours * 60 / days).round() : 0;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Center(
-            child: Text('Generează plan automat',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Silk.onSurface)),
-          ),
-          const SizedBox(height: 22),
-          const Text('MATERIE',
-              style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.w800,
-                  color: Silk.onSurfaceVar)),
-          const SizedBox(height: 8),
-          NeuInset(
-            radius: 16,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: TextField(
-              controller: _ctrl,
-              decoration: const InputDecoration(
-                  border: InputBorder.none, hintText: 'ex. Examen'),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _subjects
-                .map((s) => GestureDetector(
-                      onTap: () => setState(() => _ctrl.text = s),
-                      child: Neu(
-                        small: true,
-                        radius: 12,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        child: Text(s,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                color: Silk.onSurfaceVar,
-                                fontWeight: FontWeight.w600)),
-                      ),
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Text('Total ore: ',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              const Spacer(),
-              NeuButton(
-                padding: const EdgeInsets.all(10),
-                radius: 12,
-                onTap: () =>
-                    setState(() => _totalHours = (_totalHours - 1).clamp(1, 200)),
-                child: const Icon(Icons.remove, color: Silk.primary, size: 18),
-              ),
-              SizedBox(
-                  width: 56,
-                  child: Text('$_totalHours h',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.w800))),
-              NeuButton(
-                padding: const EdgeInsets.all(10),
-                radius: 12,
-                onTap: () =>
-                    setState(() => _totalHours = (_totalHours + 1).clamp(1, 200)),
-                child: const Icon(Icons.add, color: Silk.primary, size: 18),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                  child: _dateField('De la', _from, (d) => setState(() {
-                        _from = d;
-                        if (_to.isBefore(_from)) _to = _from;
-                      }))),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: _dateField('Până la', _to, (d) => setState(() {
-                        _to = d.isBefore(_from) ? _from : d;
-                      }))),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: Text(
-                '≈ ${_fmt(perDay)} / zi, timp de $days ${days == 1 ? "zi" : "zile"}',
-                style: const TextStyle(
-                    color: Silk.violet, fontWeight: FontWeight.w700)),
-          ),
-          const SizedBox(height: 18),
-          const Text('STIL DE ÎNVĂȚARE',
-              style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.w800,
-                  color: Silk.onSurfaceVar)),
-          const SizedBox(height: 8),
-          StyleSelector(
-              value: _style, onChanged: (s) => setState(() => _style = s)),
-          const SizedBox(height: 14),
-          NeuButton(
-            filled: true,
-            onTap: () {
-              final subject = _ctrl.text.trim();
-              if (subject.isEmpty) return;
-              final blocks = PlanService.generatePlan(
-                subject: subject,
-                totalMinutes: _totalHours * 60,
-                from: _from,
-                to: _to,
-                idSeed: DateTime.now().microsecondsSinceEpoch,
-                style: _style,
-              );
-              Navigator.of(context).pop(blocks);
-            },
-            child: const Text('Generează',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _dateField(String label, DateTime value, ValueChanged<DateTime> onPick) {
-    return GestureDetector(
-      onTap: () async {
-        final picked = await showDatePicker(
-          context: context,
-          initialDate: value,
-          firstDate: DateTime.now().subtract(const Duration(days: 1)),
-          lastDate: DateTime.now().add(const Duration(days: 365)),
-        );
-        if (picked != null) onPick(StatsService.dayOnly(picked));
-      },
-      child: Neu(
-        small: true,
-        radius: 14,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 11, color: Silk.onSurfaceVar)),
-            const SizedBox(height: 2),
-            Text('${value.day}.${value.month}.${value.year}',
-                style: const TextStyle(fontWeight: FontWeight.w700)),
-          ],
-        ),
-      ),
-    );
-  }
-}

@@ -24,6 +24,43 @@ class Silk {
   static List<BoxShadow> raisedSoft() => raised(d: 4, blur: 8);
 }
 
+/// Antet de bottom sheet: titlu centrat + buton X de inchidere.
+class SheetHeader extends StatelessWidget {
+  final String title;
+  const SheetHeader(this.title, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const SizedBox(width: 40),
+        Expanded(
+          child: Text(title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Silk.onSurface)),
+        ),
+        GestureDetector(
+          onTap: () => Navigator.of(context).pop(),
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Silk.bg,
+              shape: BoxShape.circle,
+              boxShadow: Silk.raisedSoft(),
+            ),
+            child: const Icon(Icons.close_rounded,
+                color: Silk.onSurfaceVar, size: 20),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Card / suprafata ridicata neomorfica.
 class Neu extends StatelessWidget {
   final Widget child;

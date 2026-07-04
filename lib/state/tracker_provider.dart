@@ -140,14 +140,54 @@ class TrackerController extends StateNotifier<TrackerState> {
     } else {
       goals.add(goal);
     }
+
+    // Distribuie automat obiectivul pe zilele ramase din saptamana (task-uri
+    // pe timp care se umplu singure cand studiezi materia).
+    final blocks = _regenGoalBlocks(subject, weeklyMinutes);
+
     await _storage.saveGoals(goals);
-    state = state.copyWith(goals: goals);
+    await _storage.saveBlocks(blocks);
+    state = state.copyWith(goals: goals, blocks: blocks);
   }
 
   Future<void> deleteGoal(SubjectGoal g) async {
     final goals = [...state.goals]..remove(g);
+    // scoate si task-urile auto generate din acest obiectiv (azi + viitor)
+    final today = StatsService.dayOnly(DateTime.now());
+    final blocks = state.blocks
+        .where((b) => !(b.fromGoal &&
+            b.subject.toLowerCase() == g.subject.toLowerCase() &&
+            !StatsService.dayOnly(b.date).isBefore(today)))
+        .toList();
     await _storage.saveGoals(goals);
-    state = state.copyWith(goals: goals);
+    await _storage.saveBlocks(blocks);
+    state = state.copyWith(goals: goals, blocks: blocks);
+  }
+
+  /// Reface blocurile auto pentru [subject]: le scoate pe cele vechi (azi/viitor)
+  /// si genereaza altele noi pana la finalul saptamanii.
+  List<PlannedBlock> _regenGoalBlocks(String subject, int weeklyMinutes) {
+    final now = DateTime.now();
+    final today = StatsService.dayOnly(now);
+    final endOfWeek = PlanService.weekEnd(now);
+
+    // pastreaza tot ce NU e auto-din-acest-obiectiv-azi/viitor
+    final kept = state.blocks
+        .where((b) => !(b.fromGoal &&
+            b.subject.toLowerCase() == subject.toLowerCase() &&
+            !StatsService.dayOnly(b.date).isBefore(today)))
+        .toList();
+
+    if (endOfWeek.isBefore(today)) return kept; // saptamana s-a terminat
+    final generated = PlanService.generatePlan(
+      subject: subject,
+      totalMinutes: weeklyMinutes,
+      from: today,
+      to: endOfWeek,
+      idSeed: DateTime.now().microsecondsSinceEpoch,
+      fromGoal: true,
+    );
+    return [...kept, ...generated];
   }
 
   // --- Blocuri planificate ---
@@ -187,36 +227,63 @@ class TrackerController extends StateNotifier<TrackerState> {
   }
 
   // --- Examene ---
-  /// Adauga un examen. Daca [Exam.studyHoursTarget] e setat, genereaza automat
-  /// un plan de studiu de la [Exam.notifyFrom] (sau azi) pana in ziua examenului.
+  /// Adauga un examen. Daca [Exam.hoursPerDay] e setat, genereaza automat
+  /// cate un bloc/zi de la [Exam.notifyFrom] (sau azi) pana in ziua examenului.
   Future<void> addExam(Exam exam) async {
     final exams = [...state.exams, exam];
-    var blocks = state.blocks;
-
-    if (exam.studyHoursTarget != null && exam.studyHoursTarget! > 0) {
-      final from = exam.notifyFrom ?? DateTime.now();
-      final to = exam.dateTime.subtract(const Duration(days: 1));
-      final generated = PlanService.generatePlan(
-        subject: exam.name,
-        totalMinutes: exam.studyHoursTarget! * 60,
-        from: from,
-        to: to.isBefore(from) ? from : to,
-        idSeed: DateTime.now().microsecondsSinceEpoch,
-        style: exam.studyStyle,
-      );
-      blocks = [...state.blocks, ...generated];
-      await _storage.saveBlocks(blocks);
-    }
-
+    final blocks = [...state.blocks, ..._examBlocks(exam)];
     await _storage.saveExams(exams);
+    await _storage.saveBlocks(blocks);
     state = state.copyWith(exams: exams, blocks: blocks);
     _syncNotifications();
   }
 
-  Future<void> deleteExam(Exam e) async {
-    final exams = [...state.exams]..removeWhere((x) => x.id == e.id);
+  /// Editeaza un examen: inlocuieste datele + regenereaza blocurile lui.
+  Future<void> updateExam(Exam updated) async {
+    final exams = [...state.exams];
+    final i = exams.indexWhere((x) => x.id == updated.id);
+    if (i < 0) return;
+    exams[i] = updated;
+    final kept =
+        state.blocks.where((b) => b.examId != updated.id).toList();
+    final blocks = [...kept, ..._examBlocks(updated)];
+    await _storage.saveExams(exams);
+    await _storage.saveBlocks(blocks);
+    state = state.copyWith(exams: exams, blocks: blocks);
+    _syncNotifications();
+  }
+
+  List<PlannedBlock> _examBlocks(Exam exam) {
+    if (exam.hoursPerDay == null || exam.hoursPerDay! <= 0) return [];
+    final from = exam.notifyFrom ?? DateTime.now();
+    final to = exam.dateTime.subtract(const Duration(days: 1));
+    final safeTo = to.isBefore(from) ? from : to;
+    return PlanService.generateDailyPlan(
+      subject: exam.name,
+      minutesPerDay: exam.hoursPerDay! * 60,
+      from: from,
+      to: safeTo,
+      idSeed: DateTime.now().microsecondsSinceEpoch,
+      examId: exam.id,
+    );
+  }
+
+  Future<void> setExamResult(Exam e, ExamResult result) async {
+    final exams = [...state.exams];
+    final i = exams.indexWhere((x) => x.id == e.id);
+    if (i < 0) return;
+    exams[i] = e.copyWith(result: result);
     await _storage.saveExams(exams);
     state = state.copyWith(exams: exams);
+  }
+
+  Future<void> deleteExam(Exam e) async {
+    final exams = [...state.exams]..removeWhere((x) => x.id == e.id);
+    // scoate si blocurile generate din acest examen
+    final blocks = state.blocks.where((b) => b.examId != e.id).toList();
+    await _storage.saveExams(exams);
+    await _storage.saveBlocks(blocks);
+    state = state.copyWith(exams: exams, blocks: blocks);
     _syncNotifications();
   }
 

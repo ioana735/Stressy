@@ -4,6 +4,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/tracker_provider.dart';
 import '../theme/silk.dart';
 
+/// Pagina de setari (deschisa din rotita de pe Dashboard, cu buton de inapoi).
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Silk.bg,
+      appBar: AppBar(
+        backgroundColor: Silk.bg,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Silk.onSurface),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text('Setări',
+            style: TextStyle(
+                color: Silk.onSurface, fontWeight: FontWeight.w800)),
+      ),
+      body: const SafeArea(child: SettingsView()),
+    );
+  }
+}
+
 class SettingsView extends ConsumerWidget {
   const SettingsView({super.key});
 
@@ -16,15 +40,9 @@ class SettingsView extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
       children: [
-        const Text('Settings',
-            style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w800,
-                color: Silk.onSurface)),
-        const SizedBox(height: 4),
         const Text('Gestionează obiectivele și reminderele zilnice.',
             style: TextStyle(color: Silk.onSurfaceVar)),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
 
         // --- Obiectiv ---
         _Label(icon: Icons.timer_outlined, text: 'OBIECTIV ZILNIC'),
