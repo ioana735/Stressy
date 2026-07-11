@@ -6,6 +6,7 @@ import '../models/exam.dart';
 import '../models/planned_block.dart';
 import '../models/study_session.dart';
 import '../models/subject_goal.dart';
+import '../models/subject_grade.dart';
 import '../models/tracker_settings.dart';
 
 /// Persistenta locala (shared_preferences). Tot ce tine de salvare e izolat aici.
@@ -17,12 +18,57 @@ class StorageService {
   static const _kGoals = 'subject_goals';
   static const _kBlocks = 'planned_blocks';
   static const _kExams = 'exams';
+  static const _kGrades = 'grades';
+
+  static const _allKeys = [
+    _kSessions, _kSettings, _kStreak, _kLastStudyDay,
+    _kGoals, _kBlocks, _kExams, _kGrades,
+  ];
 
   final SharedPreferences _prefs;
   StorageService(this._prefs);
 
   static Future<StorageService> create() async =>
       StorageService(await SharedPreferences.getInstance());
+
+  // --- Backup (export / import) ---
+  /// Serializeaza toate datele intr-un text (pentru backup).
+  String exportJson() {
+    final data = <String, dynamic>{};
+    for (final k in _allKeys) {
+      final v = _prefs.get(k);
+      if (v != null) data[k] = v;
+    }
+    return jsonEncode({'app': 'stressy', 'version': 1, 'data': data});
+  }
+
+  /// Restaureaza datele dintr-un text de backup. Intoarce true la succes.
+  Future<bool> importJson(String raw) async {
+    try {
+      final decoded = jsonDecode(raw.trim()) as Map<String, dynamic>;
+      final data = decoded['data'] as Map<String, dynamic>;
+      for (final k in _allKeys) {
+        await _prefs.remove(k);
+      }
+      for (final e in data.entries) {
+        final v = e.value;
+        if (v is String) {
+          await _prefs.setString(e.key, v);
+        } else if (v is bool) {
+          await _prefs.setBool(e.key, v);
+        } else if (v is int) {
+          await _prefs.setInt(e.key, v);
+        } else if (v is double) {
+          await _prefs.setDouble(e.key, v);
+        } else if (v is num) {
+          await _prefs.setDouble(e.key, v.toDouble());
+        }
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   // --- Sesiuni ---
   List<StudySession> loadSessions() {
@@ -102,6 +148,22 @@ class StorageService {
 
   Future<void> saveExams(List<Exam> exams) => _prefs.setString(
       _kExams, jsonEncode(exams.map((e) => e.toJson()).toList()));
+
+  // --- Note ---
+  List<SubjectGrade> loadGrades() {
+    final raw = _prefs.getString(_kGrades);
+    if (raw == null) return [];
+    try {
+      return (jsonDecode(raw) as List)
+          .map((e) => SubjectGrade.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> saveGrades(List<SubjectGrade> grades) => _prefs.setString(
+      _kGrades, jsonEncode(grades.map((g) => g.toJson()).toList()));
 
   // --- Streak ---
   int get streak => _prefs.getInt(_kStreak) ?? 0;

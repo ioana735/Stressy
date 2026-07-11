@@ -10,6 +10,7 @@ import '../models/exam.dart';
 import '../models/planned_block.dart';
 import '../models/study_session.dart';
 import '../models/subject_goal.dart';
+import '../models/subject_grade.dart';
 import '../models/tracker_settings.dart';
 
 /// Injectate in main() dupa init.
@@ -34,6 +35,7 @@ class TrackerState {
   final List<SubjectGoal> goals;
   final List<PlannedBlock> blocks;
   final List<Exam> exams;
+  final List<SubjectGrade> grades;
 
   const TrackerState({
     required this.sessions,
@@ -42,6 +44,7 @@ class TrackerState {
     this.goals = const [],
     this.blocks = const [],
     this.exams = const [],
+    this.grades = const [],
   });
 
   int get minutesToday => StatsService.minutesToday(sessions, DateTime.now());
@@ -60,6 +63,7 @@ class TrackerState {
     List<SubjectGoal>? goals,
     List<PlannedBlock>? blocks,
     List<Exam>? exams,
+    List<SubjectGrade>? grades,
   }) =>
       TrackerState(
         sessions: sessions ?? this.sessions,
@@ -68,6 +72,7 @@ class TrackerState {
         goals: goals ?? this.goals,
         blocks: blocks ?? this.blocks,
         exams: exams ?? this.exams,
+        grades: grades ?? this.grades,
       );
 }
 
@@ -93,7 +98,39 @@ class TrackerController extends StateNotifier<TrackerState> {
       goals: s.loadGoals(),
       blocks: s.loadBlocks(),
       exams: s.loadExams(),
+      grades: s.loadGrades(),
     );
+  }
+
+  // --- Backup ---
+  String exportData() => _storage.exportJson();
+
+  Future<bool> importData(String raw) async {
+    final ok = await _storage.importJson(raw);
+    if (ok) {
+      state = _initial(_storage);
+      _syncNotifications();
+    }
+    return ok;
+  }
+
+  // --- Note ---
+  Future<void> saveGrade(SubjectGrade g) async {
+    final grades = [...state.grades];
+    final i = grades.indexWhere((x) => x.id == g.id);
+    if (i >= 0) {
+      grades[i] = g;
+    } else {
+      grades.add(g);
+    }
+    await _storage.saveGrades(grades);
+    state = state.copyWith(grades: grades);
+  }
+
+  Future<void> deleteGrade(SubjectGrade g) async {
+    final grades = [...state.grades]..removeWhere((x) => x.id == g.id);
+    await _storage.saveGrades(grades);
+    state = state.copyWith(grades: grades);
   }
 
   /// Inregistreaza o sesiune de studiu (din timer sau adaugata manual).

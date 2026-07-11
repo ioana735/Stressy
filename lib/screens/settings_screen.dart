@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/tracker_provider.dart';
@@ -175,8 +176,142 @@ class SettingsView extends ConsumerWidget {
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar),
         ),
+        const SizedBox(height: 24),
+
+        // --- Backup ---
+        _Label(icon: Icons.backup_outlined, text: 'BACKUP DATE'),
+        const SizedBox(height: 10),
+        Neu(
+          child: Column(
+            children: [
+              const Text(
+                  'Salvează un backup înainte să ștergi/reinstalezi aplicația. Datele nu se sincronizează automat.',
+                  style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
+              const SizedBox(height: 12),
+              NeuButton(
+                onTap: () => _exportBackup(context, ctrl),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.upload_rounded, color: Silk.primary, size: 20),
+                    SizedBox(width: 10),
+                    Text('Exportă datele',
+                        style: TextStyle(
+                            color: Silk.primary, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              NeuButton(
+                onTap: () => _importBackup(context, ctrl),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.download_rounded,
+                        color: Silk.violet, size: 20),
+                    SizedBox(width: 10),
+                    Text('Importă datele',
+                        style: TextStyle(
+                            color: Silk.violet, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
+  }
+
+  Future<void> _exportBackup(BuildContext context, TrackerController ctrl) async {
+    final data = ctrl.exportData();
+    await Clipboard.setData(ClipboardData(text: data));
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Silk.bg,
+        title: const Text('Backup copiat ✅'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                  'Am copiat backup-ul în clipboard. Lipește-l undeva sigur (Notițe, email, mesaj către tine). Ca să restaurezi, apeși „Importă datele" și lipești textul.',
+                  style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 12),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 120),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFDFE2EA),
+                    borderRadius: BorderRadius.circular(10)),
+                child: SingleChildScrollView(
+                  child: SelectableText(data,
+                      style: const TextStyle(fontSize: 10)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Gata')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _importBackup(BuildContext context, TrackerController ctrl) async {
+    final controller = TextEditingController();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Silk.bg,
+        title: const Text('Importă backup'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+                'Lipește aici backup-ul salvat. ⚠️ Va înlocui datele actuale.',
+                style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 12),
+            NeuInset(
+              radius: 12,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: TextField(
+                controller: controller,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                    border: InputBorder.none, hintText: 'Lipește backup-ul...'),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Anulează')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Importă')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    final ok = await ctrl.importData(controller.text);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(ok
+            ? 'Datele au fost restaurate! 🎉'
+            : 'Backup invalid — verifică textul.'),
+      ));
+    }
   }
 
   String _fmt(int h, int m) =>

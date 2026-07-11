@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/silk.dart';
+import 'grades_screen.dart';
 import 'home_screen.dart';
 import 'plan_screen.dart';
 import 'stats_screen.dart';
@@ -18,6 +19,7 @@ class _RootScreenState extends State<RootScreen> {
   static const _tabs = [
     DashboardView(),
     PlanView(),
+    GradesView(),
     StatsView(),
   ];
 
@@ -27,11 +29,27 @@ class _RootScreenState extends State<RootScreen> {
       backgroundColor: Silk.bg,
       body: SafeArea(
         bottom: false,
-        child: IndexedStack(index: _index, children: _tabs),
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final w = c.maxWidth < 480 ? c.maxWidth : 480.0;
+            return Center(
+              child: SizedBox(
+                width: w,
+                height: c.maxHeight,
+                child: IndexedStack(index: _index, children: _tabs),
+              ),
+            );
+          },
+        ),
       ),
-      bottomNavigationBar: _BottomNav(
-        index: _index,
-        onTap: (i) => setState(() => _index = i),
+      bottomNavigationBar: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: _BottomNav(
+            index: _index,
+            onTap: (i) => setState(() => _index = i),
+          ),
+        ),
       ),
     );
   }
@@ -45,6 +63,7 @@ class _BottomNav extends StatelessWidget {
   static const _items = [
     (Icons.dashboard_rounded, 'Dashboard'),
     (Icons.event_note_rounded, 'Plan'),
+    (Icons.grade_rounded, 'Note'),
     (Icons.history_rounded, 'Stats'),
   ];
 

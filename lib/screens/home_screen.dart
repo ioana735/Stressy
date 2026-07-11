@@ -176,20 +176,11 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(children: [
-                const Neu(
-                    padding: EdgeInsets.all(8),
-                    radius: 16,
-                    small: true,
-                    child: Icon(Icons.person_rounded,
-                        color: Silk.primary, size: 22)),
-                const SizedBox(width: 12),
-                Text('Stressy',
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: Silk.primary)),
-              ]),
+              Text('Stressy',
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: Silk.primary)),
               Neu(
                   padding: const EdgeInsets.all(10),
                   radius: 16,
