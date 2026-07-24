@@ -88,7 +88,7 @@ class _RingPainter extends CustomPainter {
     final center = size.center(Offset.zero);
     final radius = size.width / 2 - 22;
     final track = Paint()
-      ..color = const Color(0xFFDDE0E8)
+      ..color = Silk.track
       ..style = PaintingStyle.stroke
       ..strokeWidth = 18
       ..strokeCap = StrokeCap.round;

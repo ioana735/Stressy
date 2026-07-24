@@ -46,7 +46,7 @@ class WeeklyChart extends StatelessWidget {
                       decoration: BoxDecoration(
                           color: Silk.violet,
                           borderRadius: BorderRadius.circular(8)),
-                      child: const Text('AZI',
+                      child: Text('AZI',
                           style: TextStyle(
                               fontSize: 8,
                               color: Colors.white,
@@ -64,7 +64,7 @@ class WeeklyChart extends StatelessWidget {
                           Container(
                             width: 16,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFDDE0E8),
+                              color: Silk.track,
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),

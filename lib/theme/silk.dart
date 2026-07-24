@@ -1,24 +1,54 @@
 import 'package:flutter/material.dart';
 
 /// Paleta + helperi pentru stilul neomorfic "Silk" (soft UI).
+/// Suporta mod deschis/intunecat prin flag-ul [dark] (setat in StressyApp).
 class Silk {
-  // culori
-  static const bg = Color(0xFFE8EAF0); // "clay"
+  /// Tema curenta. Setat de StressyApp inainte de build.
+  static bool dark = false;
+
+  // culori de brand (la fel pe ambele teme)
   static const primary = Color(0xFF6366F1); // indigo
   static const violet = Color(0xFF7C3AED);
-  static const onSurface = Color(0xFF2A2D3A);
-  static const onSurfaceVar = Color(0xFF8A8FA3);
   static const success = Color(0xFF22B07D);
 
-  // umbre neomorfice
-  static const _dark = Color(0x14000000); // rgba(0,0,0,0.08)
-  static const _light = Color(0x99FFFFFF); // rgba(255,255,255,0.6)
+  // culori dependente de tema
+  static Color get bg =>
+      dark ? const Color(0xFF14161C) : const Color(0xFFE8EAF0);
+  static Color get surface =>
+      dark ? const Color(0xFF23262F) : Colors.white;
+  static Color get onSurface =>
+      dark ? const Color(0xFFECEEF3) : const Color(0xFF2A2D3A);
+  static Color get onSurfaceVar =>
+      dark ? const Color(0xFF9BA0AE) : const Color(0xFF8A8FA3);
+  static Color get track =>
+      dark ? const Color(0xFF31343E) : const Color(0xFFDDE0E8);
+  static Color get inset =>
+      dark ? const Color(0xFF1A1C22) : const Color(0xFFDFE2EA);
+  static Color get divider =>
+      dark ? const Color(0x1FFFFFFF) : const Color(0x11000000);
 
   /// Umbre pentru element RIDICAT (extrudat din suprafata).
-  static List<BoxShadow> raised({double d = 6, double blur = 12}) => [
-        BoxShadow(color: _dark, offset: Offset(d, d), blurRadius: blur),
-        BoxShadow(color: _light, offset: Offset(-d, -d), blurRadius: blur),
-      ];
+  static List<BoxShadow> raised({double d = 6, double blur = 12}) => dark
+      ? [
+          BoxShadow(
+              color: const Color(0x80000000),
+              offset: Offset(d, d),
+              blurRadius: blur),
+          BoxShadow(
+              color: const Color(0x0DFFFFFF),
+              offset: Offset(-d, -d),
+              blurRadius: blur),
+        ]
+      : [
+          BoxShadow(
+              color: const Color(0x14000000),
+              offset: Offset(d, d),
+              blurRadius: blur),
+          BoxShadow(
+              color: const Color(0x99FFFFFF),
+              offset: Offset(-d, -d),
+              blurRadius: blur),
+        ];
 
   /// Umbre subtile pentru element ridicat mic.
   static List<BoxShadow> raisedSoft() => raised(d: 4, blur: 8);
@@ -37,7 +67,7 @@ class SheetHeader extends StatelessWidget {
         Expanded(
           child: Text(title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: Silk.onSurface)),
@@ -52,7 +82,7 @@ class SheetHeader extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: Silk.raisedSoft(),
             ),
-            child: const Icon(Icons.close_rounded,
+            child: Icon(Icons.close_rounded,
                 color: Silk.onSurfaceVar, size: 20),
           ),
         ),
@@ -123,13 +153,13 @@ class _InsetPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final rrect = RRect.fromRectAndRadius(
         Offset.zero & size, Radius.circular(radius));
-    // fundal usor mai inchis
-    canvas.drawRRect(rrect, Paint()..color = const Color(0xFFDFE2EA));
+    // fundal infundat
+    canvas.drawRRect(rrect, Paint()..color = Silk.inset);
     canvas.save();
     canvas.clipRRect(rrect);
     // umbra interioara sus-stanga (intunecat)
     final dark = Paint()
-      ..color = const Color(0x12000000)
+      ..color = Silk.dark ? const Color(0x40000000) : const Color(0x12000000)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     canvas.drawRRect(
         rrect.shift(const Offset(3, 3)),
@@ -137,7 +167,8 @@ class _InsetPainter extends CustomPainter {
           ..strokeWidth = 4);
     // lumina interioara jos-dreapta
     final light = Paint()
-      ..color = const Color(0x80FFFFFF)
+      ..color =
+          Silk.dark ? const Color(0x0DFFFFFF) : const Color(0x80FFFFFF)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4;
@@ -146,7 +177,7 @@ class _InsetPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_InsetPainter old) => false;
+  bool shouldRepaint(_InsetPainter old) => true;
 }
 
 /// Buton neomorfic ridicat (varianta plina indigo sau pe suprafata).

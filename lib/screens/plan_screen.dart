@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import '../logic/downloader.dart';
+import '../logic/ics_service.dart';
 import '../logic/plan_service.dart';
 import '../logic/stats_service.dart';
 import '../models/exam.dart';
@@ -49,13 +51,13 @@ class _PlanViewState extends ConsumerState<PlanView> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
       children: [
-        const Text('Plan',
+        Text('Plan',
             style: TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.w800,
                 color: Silk.onSurface)),
         const SizedBox(height: 4),
-        const Text('Planifică-ți din timp ce și cât studiezi.',
+        Text('Planifică-ți din timp ce și cât studiezi.',
             style: TextStyle(color: Silk.onSurfaceVar)),
         const SizedBox(height: 20),
 
@@ -83,7 +85,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
               selectedDecoration:
                   BoxDecoration(color: Silk.primary, shape: BoxShape.circle),
             ),
-            headerStyle: const HeaderStyle(
+            headerStyle: HeaderStyle(
               formatButtonVisible: false,
               titleCentered: true,
               titleTextStyle: TextStyle(
@@ -127,7 +129,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
         const SizedBox(height: 12),
         // legenda
         Row(
-          children: const [
+          children: [
             _Dot(color: Color(0xFFE5484D)),
             SizedBox(width: 4),
             Text('Examen', style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
@@ -144,7 +146,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Examene',
+            Text('Examene',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
             GestureDetector(
               onTap: () => _addExamSheet(ctrl),
@@ -161,7 +163,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
         const SizedBox(height: 12),
         if (state.exams.isEmpty)
           Neu(
-            child: const Center(
+            child: Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
                 child: Text('Pune-ți examenele pe calendar.',
@@ -196,7 +198,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         alignment: Alignment.center,
-                        child: const Icon(Icons.school_rounded,
+                        child: Icon(Icons.school_rounded,
                             color: Colors.white, size: 22),
                       ),
                       const SizedBox(width: 14),
@@ -205,16 +207,29 @@ class _PlanViewState extends ConsumerState<PlanView> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(e.name,
-                                style: const TextStyle(
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     color: Silk.onSurface)),
                             Text(
                                 '${e.kindLabel}${e.format != ExamFormat.none ? " • ${e.format.label}" : ""} · ${_fmtDate(e.dateTime)} ${_fmtTime(e.dateTime)}',
-                                style: const TextStyle(
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
                                     fontSize: 12, color: Silk.onSurfaceVar)),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () => _exportToCalendar(e),
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: EdgeInsets.all(4),
+                          child: Icon(Icons.calendar_month_rounded,
+                              color: Silk.primary, size: 22),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
                       Text(
                         past
                             ? 'trecut'
@@ -242,7 +257,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(_dayLabel(_selectedDay),
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 16, fontWeight: FontWeight.w800)),
             GestureDetector(
               onTap: () => _addBlockSheet(ctrl),
@@ -259,7 +274,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
         const SizedBox(height: 12),
         if (dayBlocks.isEmpty)
           Neu(
-            child: const Center(
+            child: Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
                 child: Text('Niciun bloc planificat pentru această zi.',
@@ -300,7 +315,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
         decoration: BoxDecoration(
             color: const Color(0xFFE5484D),
             borderRadius: BorderRadius.circular(20)),
-        child: const Icon(Icons.delete, color: Colors.white),
+        child: Icon(Icons.delete, color: Colors.white),
       );
 
   // ---------- bottom sheets ----------
@@ -315,6 +330,29 @@ class _PlanViewState extends ConsumerState<PlanView> {
       builder: (_) => _BlockSheet(day: _selectedDay, dayLabel: _dayLabel(_selectedDay)),
     );
     if (block != null) ctrl.addBlock(block);
+  }
+
+  /// Exporta examenul + planul lui ca fisier .ics (Calendar iOS/Android).
+  Future<void> _exportToCalendar(Exam e) async {
+    final state = ref.read(trackerControllerProvider);
+    final blocks = state.blocks.where((b) => b.examId == e.id).toList();
+    final ics = IcsService.examCalendar(
+      exam: e,
+      blocks: blocks,
+      stamp: DateTime.now(),
+      reminderHour: state.settings.reminderHour ?? 18,
+    );
+    final safeName =
+        e.name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+    final ok = await downloadText('stressy_$safeName.ics', ics, 'text/calendar');
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(ok
+            ? 'Calendar descărcat — deschide-l ca să-l adaugi 📅'
+            : 'Exportul în calendar merge pe web/telefon.'),
+      ));
+    }
   }
 
   /// Adauga sau (daca [edit] != null) editeaza un examen.
@@ -349,12 +387,19 @@ class _PlanViewState extends ConsumerState<PlanView> {
   String _fmtTime(DateTime d) =>
       '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
+  static const _months = [
+    'ian', 'feb', 'mar', 'apr', 'mai', 'iun',
+    'iul', 'aug', 'sep', 'oct', 'noi', 'dec'
+  ];
+  static const _weekdays = ['Lun', 'Mar', 'Mie', 'Joi', 'Vin', 'Sâm', 'Dum'];
+
   String _dayLabel(DateTime d) {
     final now = StatsService.dayOnly(DateTime.now());
     final diff = d.difference(now).inDays;
     if (diff == 0) return 'Azi';
     if (diff == 1) return 'Mâine';
-    return '${d.day}.${d.month}';
+    if (diff == -1) return 'Ieri';
+    return '${_weekdays[(d.weekday - 1) % 7]} ${d.day} ${_months[d.month - 1]}';
   }
 }
 
@@ -396,7 +441,7 @@ class StyleSelector extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Text(s.emoji, style: const TextStyle(fontSize: 22)),
+                  Text(s.emoji, style: TextStyle(fontSize: 22)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -409,13 +454,13 @@ class StyleSelector extends StatelessWidget {
                                     ? Silk.primary
                                     : Silk.onSurface)),
                         Text(s.description,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 11, color: Silk.onSurfaceVar)),
                       ],
                     ),
                   ),
                   if (selected)
-                    const Icon(Icons.check_circle,
+                    Icon(Icons.check_circle,
                         color: Silk.primary, size: 20),
                 ],
               ),
@@ -576,7 +621,7 @@ class _ExamSheetState extends State<_ExamSheet> {
                 children: [
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text('Fă-mi un plan de învățat',
                             style: TextStyle(
                                 fontWeight: FontWeight.w700,
@@ -591,11 +636,11 @@ class _ExamSheetState extends State<_ExamSheet> {
                     ],
                   ),
                   if (_autoPlan) ...[
-                    const Divider(color: Color(0x11000000)),
+                    Divider(color: Silk.divider),
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Text('Ore pe zi:',
+                        Text('Ore pe zi:',
                             style: TextStyle(color: Silk.onSurfaceVar)),
                         const Spacer(),
                         NeuButton(
@@ -603,21 +648,21 @@ class _ExamSheetState extends State<_ExamSheet> {
                           radius: 10,
                           onTap: () => setState(() =>
                               _hoursPerDay = (_hoursPerDay - 1).clamp(1, 16)),
-                          child: const Icon(Icons.remove,
+                          child: Icon(Icons.remove,
                               color: Silk.primary, size: 16),
                         ),
                         SizedBox(
                             width: 48,
                             child: Text('${_hoursPerDay}h',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontWeight: FontWeight.w800))),
                         NeuButton(
                           padding: const EdgeInsets.all(8),
                           radius: 10,
                           onTap: () => setState(() =>
                               _hoursPerDay = (_hoursPerDay + 1).clamp(1, 16)),
-                          child: const Icon(Icons.add,
+                          child: Icon(Icons.add,
                               color: Silk.primary, size: 16),
                         ),
                       ],
@@ -668,7 +713,7 @@ class _ExamSheetState extends State<_ExamSheet> {
                 ));
               },
               child: Text(editing ? 'Salvează modificările' : 'Salvează examenul',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Colors.white)),
@@ -680,7 +725,7 @@ class _ExamSheetState extends State<_ExamSheet> {
   }
 
   Widget _lbl(String t) => Text(t,
-      style: const TextStyle(
+      style: TextStyle(
           fontSize: 11,
           letterSpacing: 1,
           fontWeight: FontWeight.w800,
@@ -714,10 +759,10 @@ class _ExamSheetState extends State<_ExamSheet> {
           children: [
             Text(label,
                 style:
-                    const TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
+                    TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
             const SizedBox(height: 2),
             Text(value,
-                style: const TextStyle(fontWeight: FontWeight.w700)),
+                style: TextStyle(fontWeight: FontWeight.w700)),
           ],
         ),
       );
@@ -785,7 +830,7 @@ class _BlockSheetState extends State<_BlockSheet> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6),
                           child: Text(s,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 12,
                                   color: Silk.onSurfaceVar,
                                   fontWeight: FontWeight.w600)),
@@ -815,7 +860,7 @@ class _BlockSheetState extends State<_BlockSheet> {
                 children: [
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text('Țintă (pagini, exerciții...)',
                             style: TextStyle(
                                 fontWeight: FontWeight.w700,
@@ -830,7 +875,7 @@ class _BlockSheetState extends State<_BlockSheet> {
                     ],
                   ),
                   if (_hasTarget) ...[
-                    const Divider(color: Color(0x11000000)),
+                    Divider(color: Silk.divider),
                     const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -840,14 +885,14 @@ class _BlockSheetState extends State<_BlockSheet> {
                           radius: 12,
                           onTap: () => setState(
                               () => _target = (_target - 5).clamp(1, 100000)),
-                          child: const Icon(Icons.remove,
+                          child: Icon(Icons.remove,
                               color: Silk.primary, size: 18),
                         ),
                         SizedBox(
                             width: 70,
                             child: Text('$_target',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.w800))),
                         NeuButton(
@@ -855,7 +900,7 @@ class _BlockSheetState extends State<_BlockSheet> {
                           radius: 12,
                           onTap: () => setState(
                               () => _target = (_target + 5).clamp(1, 100000)),
-                          child: const Icon(Icons.add,
+                          child: Icon(Icons.add,
                               color: Silk.primary, size: 18),
                         ),
                       ],
@@ -899,13 +944,13 @@ class _BlockSheetState extends State<_BlockSheet> {
                   radius: 14,
                   onTap: () =>
                       setState(() => _minutes = (_minutes - 15).clamp(0, 1440)),
-                  child: const Icon(Icons.remove, color: Silk.primary),
+                  child: Icon(Icons.remove, color: Silk.primary),
                 ),
                 SizedBox(
                   width: 110,
                   child: Text(_minutes == 0 ? 'fără' : _fmt(_minutes),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 22, fontWeight: FontWeight.w700)),
                 ),
                 NeuButton(
@@ -913,7 +958,7 @@ class _BlockSheetState extends State<_BlockSheet> {
                   radius: 14,
                   onTap: () =>
                       setState(() => _minutes = (_minutes + 15).clamp(0, 1440)),
-                  child: const Icon(Icons.add, color: Silk.primary),
+                  child: Icon(Icons.add, color: Silk.primary),
                 ),
               ],
             ),
@@ -934,7 +979,7 @@ class _BlockSheetState extends State<_BlockSheet> {
                   unitLabel: _hasTarget ? _unit : null,
                 ));
               },
-              child: const Text('Adaugă în plan',
+              child: Text('Adaugă în plan',
                   style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -947,7 +992,7 @@ class _BlockSheetState extends State<_BlockSheet> {
   }
 
   Widget _label(String t) => Text(t,
-      style: const TextStyle(
+      style: TextStyle(
           fontSize: 11,
           letterSpacing: 1,
           fontWeight: FontWeight.w800,

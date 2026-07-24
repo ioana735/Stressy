@@ -19,6 +19,9 @@ class TrackerSettings {
   /// Stilul de invatare preferat (default pentru planurile generate).
   final StudyStyle studyStyle;
 
+  /// Mod intunecat.
+  final bool darkMode;
+
   const TrackerSettings({
     this.dailyGoalMinutes = 120,
     this.reminderHour = 18,
@@ -27,6 +30,7 @@ class TrackerSettings {
     this.inactivityHour = 20,
     this.streakWarning = true,
     this.studyStyle = StudyStyle.spaced,
+    this.darkMode = false,
   });
 
   bool get hasDailyReminder => reminderHour != null && reminderMinute != null;
@@ -40,6 +44,7 @@ class TrackerSettings {
     int? inactivityHour,
     bool? streakWarning,
     StudyStyle? studyStyle,
+    bool? darkMode,
   }) =>
       TrackerSettings(
         dailyGoalMinutes: dailyGoalMinutes ?? this.dailyGoalMinutes,
@@ -50,6 +55,7 @@ class TrackerSettings {
         inactivityHour: inactivityHour ?? this.inactivityHour,
         streakWarning: streakWarning ?? this.streakWarning,
         studyStyle: studyStyle ?? this.studyStyle,
+        darkMode: darkMode ?? this.darkMode,
       );
 
   Map<String, dynamic> toJson() => {
@@ -60,6 +66,7 @@ class TrackerSettings {
         'inactivityHour': inactivityHour,
         'streakWarning': streakWarning,
         'studyStyle': studyStyle.index,
+        'darkMode': darkMode,
       };
 
   factory TrackerSettings.fromJson(Map<String, dynamic> j) => TrackerSettings(
@@ -72,5 +79,6 @@ class TrackerSettings {
         studyStyle: StudyStyle.values[
             ((j['studyStyle'] as num?)?.toInt() ?? 0)
                 .clamp(0, StudyStyle.values.length - 1)],
+        darkMode: j['darkMode'] as bool? ?? false,
       );
 }

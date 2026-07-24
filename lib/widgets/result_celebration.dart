@@ -77,11 +77,11 @@ class _ResultDialogState extends State<_ResultDialog>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(passed ? '🏆' : '💪',
-                      style: const TextStyle(fontSize: 76)),
+                      style: TextStyle(fontSize: 76)),
                   const SizedBox(height: 12),
                   Text(
                     passed ? 'Felicitări! 🎉' : 'O să fie bine!',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
                         color: Silk.onSurface),
@@ -92,7 +92,7 @@ class _ResultDialogState extends State<_ResultDialog>
                         ? 'Ai trecut examenul! Munca ta a dat roade. 🌟'
                         : 'Nu-i nimic — data viitoare reușești. Fiecare încercare te face mai bun. 💜',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 15,
                         color: Silk.onSurfaceVar,
                         height: 1.4),
@@ -102,7 +102,7 @@ class _ResultDialogState extends State<_ResultDialog>
                     filled: true,
                     onTap: () => Navigator.of(context).pop(),
                     child: Text(passed ? 'Mulțumesc! 🎊' : 'Merg mai departe',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: Colors.white)),

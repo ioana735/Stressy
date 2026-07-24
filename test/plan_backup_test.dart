@@ -1,8 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:stressy/data/storage_service.dart';
+import 'package:stressy/logic/ics_service.dart';
 import 'package:stressy/logic/plan_service.dart';
 import 'package:stressy/models/exam.dart';
+import 'package:stressy/models/planned_block.dart';
 import 'package:stressy/models/study_session.dart';
 import 'package:stressy/models/subject_grade.dart';
 
@@ -54,6 +56,39 @@ void main() {
       expect(back.format, ExamFormat.oral);
       expect(back.hoursPerDay, 3);
       expect(back.result, ExamResult.passed);
+    });
+  });
+
+  group('IcsService', () {
+    test('genereaza calendar valid cu examen + blocuri', () {
+      final exam = Exam(
+        id: 'e1',
+        name: 'Analiză',
+        dateTime: DateTime(2026, 2, 1, 9),
+        kind: ExamKind.examen,
+        format: ExamFormat.scris,
+      );
+      final blocks = [
+        PlannedBlock(
+            id: 'b1',
+            date: DateTime(2026, 1, 30),
+            subject: 'Analiză',
+            plannedMinutes: 120,
+            examId: 'e1'),
+      ];
+      final ics = IcsService.examCalendar(
+        exam: exam,
+        blocks: blocks,
+        stamp: DateTime(2026, 1, 20, 10),
+      );
+      expect(ics, contains('BEGIN:VCALENDAR'));
+      expect(ics, contains('END:VCALENDAR'));
+      expect(ics, contains('SUMMARY:Examen: Analiză'));
+      expect(ics, contains('SUMMARY:Studiază: Analiză'));
+      expect(ics, contains('BEGIN:VALARM'));
+      expect(ics, contains('DTSTART:20260201T090000'));
+      // doua evenimente: examen + un bloc
+      expect('BEGIN:VEVENT'.allMatches(ics).length, 2);
     });
   });
 

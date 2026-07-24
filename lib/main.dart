@@ -25,13 +25,19 @@ Future<void> main() async {
   );
 }
 
-class StressyApp extends StatelessWidget {
+class StressyApp extends ConsumerWidget {
   const StressyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final darkMode =
+        ref.watch(trackerControllerProvider).settings.darkMode;
+    // seteaza paleta Silk inainte de a construi arborele
+    Silk.dark = darkMode;
+
     final base = ThemeData(
       useMaterial3: true,
+      brightness: darkMode ? Brightness.dark : Brightness.light,
       colorSchemeSeed: Silk.primary,
       scaffoldBackgroundColor: Silk.bg,
     );

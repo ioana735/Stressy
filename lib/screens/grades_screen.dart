@@ -38,7 +38,7 @@ class _GradesViewState extends ConsumerState<GradesView> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Note',
+            Text('Note',
                 style: TextStyle(
                     fontSize: 30,
                     fontWeight: FontWeight.w800,
@@ -98,7 +98,7 @@ class _GradesViewState extends ConsumerState<GradesView> {
                           color: Silk.primary),
                     ),
                     Container(
-                        width: 1, height: 54, color: const Color(0x11000000)),
+                        width: 1, height: 54, color: Silk.divider),
                     Expanded(
                       child: _MediaBox(
                           label: 'Ponderată (credite)',
@@ -117,14 +117,14 @@ class _GradesViewState extends ConsumerState<GradesView> {
           Center(
             child: Text('$credits credite',
                 style:
-                    const TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
+                    TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
           ),
         ],
         const SizedBox(height: 20),
 
         if (filtered.isEmpty)
           Neu(
-            child: const Center(
+            child: Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text('Adaugă prima materie cu nota ta.',
@@ -144,7 +144,7 @@ class _GradesViewState extends ConsumerState<GradesView> {
                     decoration: BoxDecoration(
                         color: const Color(0xFFE5484D),
                         borderRadius: BorderRadius.circular(20)),
-                    child: const Icon(Icons.delete, color: Colors.white),
+                    child: Icon(Icons.delete, color: Colors.white),
                   ),
                   onDismissed: (_) => ctrl.deleteGrade(g),
                   child: Neu(
@@ -157,11 +157,11 @@ class _GradesViewState extends ConsumerState<GradesView> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(g.subject,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       color: Silk.onSurface)),
                               Text(_subtitle(g),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontSize: 12,
                                       color: Silk.onSurfaceVar)),
                             ],
@@ -171,7 +171,7 @@ class _GradesViewState extends ConsumerState<GradesView> {
                           g.finalGrade == null
                               ? '—'
                               : g.finalGrade!.toStringAsFixed(2),
-                          style: const TextStyle(
+                          style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
                               color: Silk.primary),
@@ -267,7 +267,7 @@ class _MediaBox extends StatelessWidget {
         const SizedBox(height: 2),
         Text(label,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
+            style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
       ],
     );
   }
@@ -437,7 +437,7 @@ class _GradeSheetState extends State<_GradeSheet> {
               filled: true,
               onTap: _submit,
               child: Text(editing ? 'Salvează' : 'Adaugă nota',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Colors.white)),
@@ -455,11 +455,11 @@ class _GradeSheetState extends State<_GradeSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Notele la această materie',
+          Text('Notele la această materie',
               style: TextStyle(
                   fontWeight: FontWeight.w700, color: Silk.onSurface)),
           const SizedBox(height: 4),
-          const Text('Media materiei = media aritmetică a notelor.',
+          Text('Media materiei = media aritmetică a notelor.',
               style: TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
           const SizedBox(height: 10),
           Wrap(
@@ -490,7 +490,7 @@ class _GradeSheetState extends State<_GradeSheet> {
                           GestureDetector(
                             onTap: () => setState(
                                 () => _simple.removeAt(e.key).dispose()),
-                            child: const Icon(Icons.close,
+                            child: Icon(Icons.close,
                                 size: 14, color: Color(0xFFE5748A)),
                           ),
                       ],
@@ -508,7 +508,7 @@ class _GradeSheetState extends State<_GradeSheet> {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: Silk.raisedSoft(),
                   ),
-                  child: const Icon(Icons.add, color: Silk.primary, size: 20),
+                  child: Icon(Icons.add, color: Silk.primary, size: 20),
                 ),
               ),
             ],
@@ -533,7 +533,7 @@ class _GradeSheetState extends State<_GradeSheet> {
             children: [
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text('Notă din componente (%)',
                         style: TextStyle(
                             fontWeight: FontWeight.w700,
@@ -548,11 +548,11 @@ class _GradeSheetState extends State<_GradeSheet> {
                 ],
               ),
               if (!_useComponents) ...[
-                const Divider(color: Color(0x11000000)),
+                Divider(color: Silk.divider),
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Text('Nota:',
+                    Text('Nota:',
                         style: TextStyle(color: Silk.onSurfaceVar)),
                     const SizedBox(width: 12),
                     Expanded(
@@ -572,7 +572,7 @@ class _GradeSheetState extends State<_GradeSheet> {
                   ],
                 ),
               ] else ...[
-                const Divider(color: Color(0x11000000)),
+                Divider(color: Silk.divider),
                 const SizedBox(height: 6),
                 ..._comps.asMap().entries.map((e) => _compRow(e.key)),
                 const SizedBox(height: 6),
@@ -582,8 +582,8 @@ class _GradeSheetState extends State<_GradeSheet> {
                     TextButton.icon(
                       onPressed: () =>
                           setState(() => _comps.add(_CompDraft('', '', 0))),
-                      icon: const Icon(Icons.add, size: 18),
-                      label: const Text('Componentă'),
+                      icon: Icon(Icons.add, size: 18),
+                      label: Text('Componentă'),
                     ),
                     Text('Total: $pctSum%',
                         style: TextStyle(
@@ -602,7 +602,7 @@ class _GradeSheetState extends State<_GradeSheet> {
   }
 
   Widget _lbl(String t) => Text(t,
-      style: const TextStyle(
+      style: TextStyle(
           fontSize: 11,
           letterSpacing: 1,
           fontWeight: FontWeight.w800,
@@ -640,19 +640,19 @@ class _GradeSheetState extends State<_GradeSheet> {
               padding: const EdgeInsets.all(10),
               radius: 12,
               onTap: () => onDelta(-1),
-              child: const Icon(Icons.remove, color: Silk.primary, size: 18),
+              child: Icon(Icons.remove, color: Silk.primary, size: 18),
             ),
             Expanded(
               child: Text('$value',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 18, fontWeight: FontWeight.w800)),
             ),
             NeuButton(
               padding: const EdgeInsets.all(10),
               radius: 12,
               onTap: () => onDelta(1),
-              child: const Icon(Icons.add, color: Silk.primary, size: 18),
+              child: Icon(Icons.add, color: Silk.primary, size: 18),
             ),
           ],
         ),
@@ -699,18 +699,18 @@ class _GradeSheetState extends State<_GradeSheet> {
               GestureDetector(
                 onTap: () =>
                     setState(() => c.percent = (c.percent - 5).clamp(0, 100)),
-                child: const Icon(Icons.remove, size: 16, color: Silk.primary),
+                child: Icon(Icons.remove, size: 16, color: Silk.primary),
               ),
               SizedBox(
                   width: 34,
                   child: Text('${c.percent}%',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w700))),
               GestureDetector(
                 onTap: () =>
                     setState(() => c.percent = (c.percent + 5).clamp(0, 100)),
-                child: const Icon(Icons.add, size: 16, color: Silk.primary),
+                child: Icon(Icons.add, size: 16, color: Silk.primary),
               ),
             ],
           ),
@@ -719,7 +719,7 @@ class _GradeSheetState extends State<_GradeSheet> {
               onTap: () => setState(() {
                 _comps.removeAt(i).dispose();
               }),
-              child: const Padding(
+              child: Padding(
                 padding: EdgeInsets.only(left: 4),
                 child: Icon(Icons.close, size: 16, color: Color(0xFFE5748A)),
               ),

@@ -187,7 +187,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                   small: true,
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => const SettingsPage())),
-                  child: const Icon(Icons.settings_rounded,
+                  child: Icon(Icons.settings_rounded,
                       color: Silk.onSurfaceVar, size: 20)),
             ],
           ),
@@ -206,7 +206,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                   ? 'Felicitări! Ți-ai atins obiectivul de azi. 🎉'
                   : 'Concentrează-te. Ești la $pct% din obiectivul zilnic.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 15, color: Silk.onSurfaceVar, height: 1.4),
             ),
           ),
@@ -231,15 +231,15 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.menu_book_rounded,
+                    Icon(Icons.menu_book_rounded,
                         color: Silk.primary, size: 18),
                     const SizedBox(width: 8),
                     Text('Studiezi: ${_subject ?? "general"}',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: Silk.onSurface)),
                     const SizedBox(width: 8),
-                    const Text('• Schimbă',
+                    Text('• Schimbă',
                         style: TextStyle(
                             color: Silk.primary,
                             fontWeight: FontWeight.w700)),
@@ -275,17 +275,21 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                 WeeklyChart(
                     minutesPerDay: state.last7Days, goalMinutes: state.goal),
                 const SizedBox(height: 12),
-                const Divider(color: Color(0x11000000)),
+                Divider(color: Silk.divider),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Progres săptămânal',
-                        style: TextStyle(
-                            color: Silk.onSurfaceVar,
-                            fontWeight: FontWeight.w500)),
+                    Flexible(
+                      child: Text('Progres săptămânal',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: Silk.onSurfaceVar,
+                              fontWeight: FontWeight.w500)),
+                    ),
+                    const SizedBox(width: 8),
                     Text('$pct% obiectiv',
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: Silk.primary, fontWeight: FontWeight.w700)),
                   ],
                 ),
@@ -338,11 +342,11 @@ class _TodayPlan extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Azi ai de făcut',
+                Text('Azi ai de făcut',
                     style:
                         TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 Text('$doneCount/${blocks.length}',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontWeight: FontWeight.w700, color: Silk.primary)),
               ],
             ),
@@ -390,7 +394,7 @@ class _SessionButton extends StatelessWidget {
         onTap: onStart,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
             SizedBox(width: 10),
             Text('ÎNCEPE SĂ ÎNVEȚI',
@@ -426,7 +430,7 @@ class _SessionButton extends StatelessWidget {
             const SizedBox(width: 10),
             Text(
               onBreak ? 'PAUZĂ • $timeLabel' : 'STOP • $timeLabel',
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
@@ -455,19 +459,19 @@ class _MiniStat extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 18)),
+          Text(emoji, style: TextStyle(fontSize: 18)),
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(label,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Silk.onSurfaceVar,
                       fontSize: 11,
                       fontWeight: FontWeight.w500)),
               Text(value,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w800,
                       color: Silk.onSurface)),
@@ -496,7 +500,7 @@ class _DurStepper extends StatelessWidget {
       child: Column(
         children: [
           Text(label,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: Silk.onSurfaceVar)),
@@ -508,13 +512,13 @@ class _DurStepper extends StatelessWidget {
                 padding: const EdgeInsets.all(10),
                 radius: 12,
                 onTap: onMinus,
-                child: const Icon(Icons.remove, color: Silk.primary, size: 18),
+                child: Icon(Icons.remove, color: Silk.primary, size: 18),
               ),
               NeuButton(
                 padding: const EdgeInsets.all(10),
                 radius: 12,
                 onTap: onPlus,
-                child: const Icon(Icons.add, color: Silk.primary, size: 18),
+                child: Icon(Icons.add, color: Silk.primary, size: 18),
               ),
             ],
           ),
@@ -612,7 +616,7 @@ class _SessionSheetState extends State<_SessionSheet> {
             ),
             if (widget.todaySubjects.isNotEmpty) ...[
               const SizedBox(height: 10),
-              const Text('Din planul de azi:',
+              Text('Din planul de azi:',
                   style: TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
               const SizedBox(height: 6),
               Wrap(
@@ -657,7 +661,7 @@ class _SessionSheetState extends State<_SessionSheet> {
               const SizedBox(height: 6),
               Center(
                 child: Text(_fmtDur(_minutes),
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 24, fontWeight: FontWeight.w800)),
               ),
               const SizedBox(height: 10),
@@ -693,7 +697,7 @@ class _SessionSheetState extends State<_SessionSheet> {
                   children: [
                     Row(
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: Text('Pauze',
                               style: TextStyle(
                                   fontWeight: FontWeight.w700,
@@ -708,7 +712,7 @@ class _SessionSheetState extends State<_SessionSheet> {
                       ],
                     ),
                     if (_breaks) ...[
-                      const Divider(color: Color(0x11000000)),
+                      Divider(color: Silk.divider),
                       const SizedBox(height: 6),
                       _breakRow('Lucrezi', _workBlock,
                           (d) => setState(() =>
@@ -731,7 +735,7 @@ class _SessionSheetState extends State<_SessionSheet> {
                   _mode == _SessionMode.manual
                       ? 'Salvează'
                       : 'Începe sesiunea',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Colors.white)),
@@ -743,7 +747,7 @@ class _SessionSheetState extends State<_SessionSheet> {
   }
 
   Widget _label(String t) => Text(t,
-      style: const TextStyle(
+      style: TextStyle(
           fontSize: 11,
           letterSpacing: 1,
           fontWeight: FontWeight.w800,
@@ -765,7 +769,7 @@ class _SessionSheetState extends State<_SessionSheet> {
           ),
           child: Row(
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 20)),
+              Text(emoji, style: TextStyle(fontSize: 20)),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -776,13 +780,13 @@ class _SessionSheetState extends State<_SessionSheet> {
                             fontWeight: FontWeight.w700,
                             color: selected ? Silk.primary : Silk.onSurface)),
                     Text(desc,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 11, color: Silk.onSurfaceVar)),
                   ],
                 ),
               ),
               if (selected)
-                const Icon(Icons.check_circle, color: Silk.primary, size: 20),
+                Icon(Icons.check_circle, color: Silk.primary, size: 20),
             ],
           ),
         ),
@@ -795,23 +799,23 @@ class _SessionSheetState extends State<_SessionSheet> {
       children: [
         Expanded(
             child: Text(label,
-                style: const TextStyle(color: Silk.onSurfaceVar))),
+                style: TextStyle(color: Silk.onSurfaceVar))),
         NeuButton(
           padding: const EdgeInsets.all(8),
           radius: 10,
           onTap: () => onDelta(label == 'Pauză' ? -1 : -5),
-          child: const Icon(Icons.remove, color: Silk.primary, size: 16),
+          child: Icon(Icons.remove, color: Silk.primary, size: 16),
         ),
         SizedBox(
             width: 60,
             child: Text('$value min',
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w800))),
+                style: TextStyle(fontWeight: FontWeight.w800))),
         NeuButton(
           padding: const EdgeInsets.all(8),
           radius: 10,
           onTap: () => onDelta(label == 'Pauză' ? 1 : 5),
-          child: const Icon(Icons.add, color: Silk.primary, size: 16),
+          child: Icon(Icons.add, color: Silk.primary, size: 16),
         ),
       ],
     );
@@ -850,7 +854,7 @@ class _SubjectPickerSheetState extends State<_SubjectPickerSheet> {
           const SheetHeader('Pe ce comuți?'),
           const SizedBox(height: 20),
           if (widget.todaySubjects.isNotEmpty) ...[
-            const Text('Task-urile de azi:',
+            Text('Task-urile de azi:',
                 style: TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
             const SizedBox(height: 10),
             ...widget.todaySubjects.map((s) => Padding(
@@ -862,16 +866,16 @@ class _SubjectPickerSheetState extends State<_SubjectPickerSheet> {
                       radius: 14,
                       child: Row(
                         children: [
-                          const Icon(Icons.menu_book_rounded,
+                          Icon(Icons.menu_book_rounded,
                               color: Silk.primary, size: 20),
                           const SizedBox(width: 12),
                           Expanded(
                               child: Text(s,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       color: Silk.onSurface))),
                           if (widget.current?.toLowerCase() == s.toLowerCase())
-                            const Text('acum',
+                            Text('acum',
                                 style: TextStyle(
                                     fontSize: 12, color: Silk.onSurfaceVar)),
                         ],
@@ -881,7 +885,7 @@ class _SubjectPickerSheetState extends State<_SubjectPickerSheet> {
                 )),
             const SizedBox(height: 12),
           ],
-          const Text('Sau scrie o materie:',
+          Text('Sau scrie o materie:',
               style: TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
           const SizedBox(height: 8),
           NeuInset(
@@ -899,7 +903,7 @@ class _SubjectPickerSheetState extends State<_SubjectPickerSheet> {
           NeuButton(
             filled: true,
             onTap: () => Navigator.of(context).pop(_ctrl.text.trim()),
-            child: const Text('Comută',
+            child: Text('Comută',
                 style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,

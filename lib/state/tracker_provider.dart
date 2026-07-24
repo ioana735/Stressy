@@ -333,6 +333,9 @@ class TrackerController extends StateNotifier<TrackerState> {
     );
   }
 
-  Future<void> testNotification() =>
-      _notifications.showNow('Test reminder 🔔', 'Asa vor arata mementourile.');
+  Future<void> testNotification() async {
+    await _notifications.showNow(
+        'Test reminder 🔔', 'Așa vor arăta mementourile.');
+    await _notifications.scheduleTest(seconds: 10);
+  }
 }

@@ -42,7 +42,7 @@ class StatsView extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
       children: [
-        const Text('Statistici',
+        Text('Statistici',
             style: TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.w800,
@@ -54,7 +54,7 @@ class StatsView extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: const [
+              Row(children: [
                 Icon(Icons.calendar_month_rounded,
                     size: 18, color: Silk.primary),
                 SizedBox(width: 8),
@@ -96,7 +96,7 @@ class StatsView extends ConsumerWidget {
 
         // --- Rezultate examene ---
         if (state.exams.isNotEmpty) ...[
-          const Text('Examenele mele',
+          Text('Examenele mele',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
           ...([...state.exams]..sort((a, b) => b.dateTime.compareTo(a.dateTime)))
@@ -117,7 +117,7 @@ class StatsView extends ConsumerWidget {
         ],
 
         if (sessions.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(top: 40),
             child: Center(
               child: Text(
@@ -137,13 +137,13 @@ class StatsView extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(_dayLabel(day).toUpperCase(),
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 12,
                             letterSpacing: 1,
                             fontWeight: FontWeight.w800,
                             color: Silk.onSurfaceVar)),
                     Text('$total min',
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: Silk.primary,
                             fontWeight: FontWeight.w700)),
                   ],
@@ -161,7 +161,7 @@ class StatsView extends ConsumerWidget {
                         decoration: BoxDecoration(
                             color: const Color(0xFFE5484D),
                             borderRadius: BorderRadius.circular(20)),
-                        child: const Icon(Icons.delete, color: Colors.white),
+                        child: Icon(Icons.delete, color: Colors.white),
                       ),
                       onDismissed: (_) => ctrl.deleteSession(s),
                       child: Neu(
@@ -182,18 +182,18 @@ class StatsView extends ConsumerWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(s.subject ?? 'Sesiune de studiu',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontWeight: FontWeight.w700,
                                           color: Silk.onSurface)),
                                   Text(_time(s.date),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 12,
                                           color: Silk.onSurfaceVar)),
                                 ],
                               ),
                             ),
                             Text('${s.minutes} min',
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     color: Silk.onSurface)),
                           ],
@@ -247,7 +247,7 @@ class _PassRateCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: const [
+          Row(children: [
             Icon(Icons.emoji_events_rounded, size: 18, color: Silk.primary),
             SizedBox(width: 8),
             Text('PROMOVABILITATE',
@@ -271,7 +271,7 @@ class _PassRateCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text('$passed din $total examene',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 14, color: Silk.onSurfaceVar)),
               ),
             ],
@@ -282,13 +282,13 @@ class _PassRateCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: total == 0 ? 0 : passed / total,
               minHeight: 10,
-              backgroundColor: const Color(0xFFDDE0E8),
+              backgroundColor: Silk.track,
               valueColor: AlwaysStoppedAnimation(color),
             ),
           ),
           const SizedBox(height: 10),
           Text(msg,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 13, color: Silk.onSurfaceVar)),
         ],
       ),
@@ -309,7 +309,7 @@ class _ExamResultTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Silk.surface,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -318,19 +318,19 @@ class _ExamResultTile extends StatelessWidget {
           Row(
             children: [
               Text(passed ? '🏆' : (failed ? '🌱' : '🎓'),
-                  style: const TextStyle(fontSize: 24)),
+                  style: TextStyle(fontSize: 24)),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(exam.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontWeight: FontWeight.w700,
                             color: Silk.onSurface)),
                     Text(
                         '${exam.dateTime.day}.${exam.dateTime.month}.${exam.dateTime.year}',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 12, color: Silk.onSurfaceVar)),
                   ],
                 ),
@@ -389,7 +389,7 @@ class _ResultBtn extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? color : const Color(0xFFF1F2F6),
+          color: selected ? color : Silk.track,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text('$emoji  $label',
@@ -411,13 +411,13 @@ class _BigStat extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 11,
                   letterSpacing: 1,
                   fontWeight: FontWeight.w700,
                   color: Silk.onSurfaceVar)),
           Text(value,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 34,
                   fontWeight: FontWeight.w800,
                   color: Silk.primary)),

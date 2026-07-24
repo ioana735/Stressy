@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -34,6 +35,13 @@ class NotificationService {
   Future<void> init() async {
     if (kIsWeb) return;
     tz.initializeTimeZones();
+    // seteaza fusul orar al dispozitivului (altfel reminderele suna la ora gresita)
+    try {
+      final tzInfo = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(tzInfo.identifier));
+    } catch (_) {
+      // fallback: ramane default
+    }
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -168,6 +176,25 @@ class NotificationService {
     if (kIsWeb || !_ready) return;
     await _plugin.show(1, title, body, _details);
   }
+
+  /// Programeaza o notificare de test peste [seconds] secunde (ca sa vezi ca
+  /// merge chiar si cu app-ul inchis).
+  Future<void> scheduleTest({int seconds = 10}) async {
+    if (kIsWeb || !_ready) return;
+    final when = tz.TZDateTime.now(tz.local).add(Duration(seconds: seconds));
+    await _plugin.zonedSchedule(
+      99,
+      'Stressy 🔔',
+      'Notificările funcționează! Hai la învățat 📚',
+      when,
+      _details,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  bool get ready => _ready;
 
   Future<void> cancelAll() async {
     if (kIsWeb || !_ready) return;

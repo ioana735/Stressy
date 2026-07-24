@@ -80,7 +80,7 @@ class PlanBlockTile extends StatelessWidget {
                             color: complete ? Silk.success : Silk.primary))
                   else if (block.plannedMinutes > 0)
                     Text(_dur(block.plannedMinutes),
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                             color: Silk.onSurfaceVar)),
@@ -90,7 +90,7 @@ class PlanBlockTile extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(block.note!,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12, color: Silk.onSurfaceVar)),
                 ),
 
@@ -103,12 +103,12 @@ class PlanBlockTile extends StatelessWidget {
                     value: (studiedMinutes / block.plannedMinutes)
                         .clamp(0.0, 1.0),
                     minHeight: 7,
-                    backgroundColor: const Color(0xFFDDE0E8),
+                    backgroundColor: Silk.track,
                     valueColor: AlwaysStoppedAnimation(
                         complete ? Silk.success : Silk.primary),
                   ),
                 ),
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(top: 4),
                   child: Text('se umple automat când studiezi materia',
                       style: TextStyle(

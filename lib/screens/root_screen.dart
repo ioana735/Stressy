@@ -29,27 +29,11 @@ class _RootScreenState extends State<RootScreen> {
       backgroundColor: Silk.bg,
       body: SafeArea(
         bottom: false,
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final w = c.maxWidth < 480 ? c.maxWidth : 480.0;
-            return Center(
-              child: SizedBox(
-                width: w,
-                height: c.maxHeight,
-                child: IndexedStack(index: _index, children: _tabs),
-              ),
-            );
-          },
-        ),
+        child: IndexedStack(index: _index, children: _tabs),
       ),
-      bottomNavigationBar: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: _BottomNav(
-            index: _index,
-            onTap: (i) => setState(() => _index = i),
-          ),
-        ),
+      bottomNavigationBar: _BottomNav(
+        index: _index,
+        onTap: (i) => setState(() => _index = i),
       ),
     );
   }
@@ -71,7 +55,7 @@ class _BottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      decoration: const BoxDecoration(color: Silk.bg),
+      decoration: BoxDecoration(color: Silk.bg),
       child: SafeArea(
         top: false,
         child: Row(

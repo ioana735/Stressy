@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,10 +18,10 @@ class SettingsPage extends StatelessWidget {
         backgroundColor: Silk.bg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Silk.onSurface),
+          icon: Icon(Icons.arrow_back_rounded, color: Silk.onSurface),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Setări',
+        title: Text('Setări',
             style: TextStyle(
                 color: Silk.onSurface, fontWeight: FontWeight.w800)),
       ),
@@ -41,9 +42,35 @@ class SettingsView extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
       children: [
-        const Text('Gestionează obiectivele și reminderele zilnice.',
+        Text('Gestionează obiectivele și reminderele zilnice.',
             style: TextStyle(color: Silk.onSurfaceVar)),
         const SizedBox(height: 20),
+
+        // --- Aspect ---
+        _Label(icon: Icons.dark_mode_outlined, text: 'ASPECT'),
+        const SizedBox(height: 10),
+        Neu(
+          child: Row(
+            children: [
+              Icon(s.darkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                  color: Silk.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text('Mod întunecat',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, color: Silk.onSurface)),
+              ),
+              Switch(
+                value: s.darkMode,
+                activeThumbColor: Colors.white,
+                activeTrackColor: Silk.primary,
+                onChanged: (v) =>
+                    ctrl.updateSettings(s.copyWith(darkMode: v)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
 
         // --- Obiectiv ---
         _Label(icon: Icons.timer_outlined, text: 'OBIECTIV ZILNIC'),
@@ -56,7 +83,7 @@ class SettingsView extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(_goalLabel(s.dailyGoalMinutes),
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 26,
                           fontWeight: FontWeight.w800,
                           color: Silk.primary)),
@@ -67,7 +94,7 @@ class SettingsView extends ConsumerWidget {
                       onTap: () => ctrl.updateSettings(s.copyWith(
                           dailyGoalMinutes:
                               (s.dailyGoalMinutes - 30).clamp(30, 1440))),
-                      child: const Icon(Icons.remove,
+                      child: Icon(Icons.remove,
                           color: Silk.onSurfaceVar, size: 20),
                     ),
                     const SizedBox(width: 10),
@@ -77,14 +104,14 @@ class SettingsView extends ConsumerWidget {
                       onTap: () => ctrl.updateSettings(s.copyWith(
                           dailyGoalMinutes:
                               (s.dailyGoalMinutes + 30).clamp(30, 1440))),
-                      child: const Icon(Icons.add,
+                      child: Icon(Icons.add,
                           color: Silk.primary, size: 20),
                     ),
                   ]),
                 ],
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                   'Un obiectiv realist te ajută să menții focusul fără burnout.',
                   style: TextStyle(
                       fontSize: 12,
@@ -126,7 +153,7 @@ class SettingsView extends ConsumerWidget {
                       }
                     : null,
               ),
-              const Divider(color: Color(0x11000000)),
+              Divider(color: Silk.divider),
               _ToggleRow(
                 title: 'Memento de studiu',
                 subtitle: 'Dacă n-am învățat încă (🕐 ${s.inactivityHour}:00)',
@@ -134,7 +161,7 @@ class SettingsView extends ConsumerWidget {
                 onChanged: (on) =>
                     ctrl.updateSettings(s.copyWith(inactivityReminder: on)),
               ),
-              const Divider(color: Color(0x11000000)),
+              Divider(color: Silk.divider),
               _ToggleRow(
                 title: 'Avertizare streak',
                 subtitle: 'Când streak-ul e pe cale să expire',
@@ -151,16 +178,17 @@ class SettingsView extends ConsumerWidget {
           onTap: () async {
             await ctrl.testNotification();
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 behavior: SnackBarBehavior.floating,
-                content:
-                    Text('Pe web notificările nu apar — testează pe telefon.'),
+                content: Text(kIsWeb
+                    ? 'Pe web notificările nu apar — testează pe telefon.'
+                    : '🔔 Trimisă acum + una în 10 secunde (poți închide app-ul).'),
               ));
             }
           },
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
+            children: [
               Icon(Icons.notifications_active_outlined,
                   color: Silk.primary, size: 20),
               SizedBox(width: 10),
@@ -171,7 +199,7 @@ class SettingsView extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
-        const Text(
+        Text(
           '⚠️ Reminderele funcționează doar pe telefon (Android/iOS), nu pe web.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar),
@@ -184,7 +212,7 @@ class SettingsView extends ConsumerWidget {
         Neu(
           child: Column(
             children: [
-              const Text(
+              Text(
                   'Salvează un backup înainte să ștergi/reinstalezi aplicația. Datele nu se sincronizează automat.',
                   style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
               const SizedBox(height: 12),
@@ -192,7 +220,7 @@ class SettingsView extends ConsumerWidget {
                 onTap: () => _exportBackup(context, ctrl),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
+                  children: [
                     Icon(Icons.upload_rounded, color: Silk.primary, size: 20),
                     SizedBox(width: 10),
                     Text('Exportă datele',
@@ -206,7 +234,7 @@ class SettingsView extends ConsumerWidget {
                 onTap: () => _importBackup(context, ctrl),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
+                  children: [
                     Icon(Icons.download_rounded,
                         color: Silk.violet, size: 20),
                     SizedBox(width: 10),
@@ -231,14 +259,14 @@ class SettingsView extends ConsumerWidget {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: Silk.bg,
-        title: const Text('Backup copiat ✅'),
+        title: Text('Backup copiat ✅'),
         content: SizedBox(
           width: double.maxFinite,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                   'Am copiat backup-ul în clipboard. Lipește-l undeva sigur (Notițe, email, mesaj către tine). Ca să restaurezi, apeși „Importă datele" și lipești textul.',
                   style: TextStyle(fontSize: 13)),
               const SizedBox(height: 12),
@@ -250,7 +278,7 @@ class SettingsView extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(10)),
                 child: SingleChildScrollView(
                   child: SelectableText(data,
-                      style: const TextStyle(fontSize: 10)),
+                      style: TextStyle(fontSize: 10)),
                 ),
               ),
             ],
@@ -259,7 +287,7 @@ class SettingsView extends ConsumerWidget {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Gata')),
+              child: Text('Gata')),
         ],
       ),
     );
@@ -271,12 +299,12 @@ class SettingsView extends ConsumerWidget {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: Silk.bg,
-        title: const Text('Importă backup'),
+        title: Text('Importă backup'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
                 'Lipește aici backup-ul salvat. ⚠️ Va înlocui datele actuale.',
                 style: TextStyle(fontSize: 13)),
             const SizedBox(height: 12),
@@ -295,10 +323,10 @@ class SettingsView extends ConsumerWidget {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Anulează')),
+              child: Text('Anulează')),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Importă')),
+              child: Text('Importă')),
         ],
       ),
     );
@@ -336,7 +364,7 @@ class _Label extends StatelessWidget {
           Icon(icon, size: 16, color: Silk.primary),
           const SizedBox(width: 8),
           Text(text,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 12,
                   letterSpacing: 1,
                   fontWeight: FontWeight.w800,
@@ -371,7 +399,7 @@ class _ToggleRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: Silk.onSurface)),

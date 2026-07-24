@@ -15,13 +15,25 @@ dependencies:
   timezone: ^0.9.4
   google_fonts: ^6.2.1
   table_calendar: ^3.1.2
+  flutter_timezone: ^5.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  image_path: "assets/icon/icon.png"
+  ios: true
+  remove_alpha_ios: true
+  web:
+    generate: true
+    background_color: "#6366F1"
+    theme_color: "#6366F1"
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/icon/
