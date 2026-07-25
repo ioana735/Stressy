@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../state/tracker_provider.dart';
 import '../theme/silk.dart';
 import 'grades_screen.dart';
 import 'home_screen.dart';
 import 'plan_screen.dart';
 import 'stats_screen.dart';
 
-class RootScreen extends StatefulWidget {
+/// Tab-ul selectat. Permite comutarea din orice ecran (ex. de pe Dashboard
+/// spre Plan).
+final tabIndexProvider = StateProvider<int>((ref) => 0);
+
+class RootScreen extends ConsumerWidget {
   const RootScreen({super.key});
-
-  @override
-  State<RootScreen> createState() => _RootScreenState();
-}
-
-class _RootScreenState extends State<RootScreen> {
-  int _index = 0;
 
   static const _tabs = [
     DashboardView(),
@@ -24,16 +23,19 @@ class _RootScreenState extends State<RootScreen> {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final index = ref.watch(tabIndexProvider);
+    // reconstruieste cand se schimba tema (altfel fundalul ramane vechi)
+    ref.watch(trackerControllerProvider.select((s) => s.settings.darkMode));
     return Scaffold(
       backgroundColor: Silk.bg,
       body: SafeArea(
         bottom: false,
-        child: IndexedStack(index: _index, children: _tabs),
+        child: IndexedStack(index: index, children: _tabs),
       ),
       bottomNavigationBar: _BottomNav(
-        index: _index,
-        onTap: (i) => setState(() => _index = i),
+        index: index,
+        onTap: (i) => ref.read(tabIndexProvider.notifier).state = i,
       ),
     );
   }

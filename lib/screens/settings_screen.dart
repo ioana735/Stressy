@@ -126,45 +126,89 @@ class SettingsView extends ConsumerWidget {
         _Label(icon: Icons.notifications_none_rounded, text: 'REMINDERE'),
         const SizedBox(height: 10),
         Neu(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ToggleRow(
-                title: 'Reminder zilnic',
-                subtitle: s.hasDailyReminder
-                    ? '🕐 ${_fmt(s.reminderHour!, s.reminderMinute!)}'
-                    : 'Dezactivat',
-                value: s.hasDailyReminder,
-                onChanged: (on) => ctrl.updateSettings(on
-                    ? s.copyWith(reminderHour: 18, reminderMinute: 0)
-                    : s.copyWith(clearReminder: true)),
-                onSubtitleTap: s.hasDailyReminder
-                    ? () async {
-                        final picked = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay(
-                              hour: s.reminderHour!, minute: s.reminderMinute!),
-                        );
-                        if (picked != null) {
-                          ctrl.updateSettings(s.copyWith(
-                              reminderHour: picked.hour,
-                              reminderMinute: picked.minute));
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Orele la care vrei notificări',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, color: Silk.onSurface)),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: const TimeOfDay(hour: 18, minute: 0),
+                      );
+                      if (picked != null) {
+                        final t = picked.hour * 60 + picked.minute;
+                        if (!s.reminderTimes.contains(t)) {
+                          final list = [...s.reminderTimes, t]..sort();
+                          ctrl.updateSettings(s.copyWith(reminderTimes: list));
                         }
                       }
-                    : null,
+                    },
+                    child: Row(children: [
+                      const Icon(Icons.add_circle,
+                          color: Silk.primary, size: 20),
+                      const SizedBox(width: 4),
+                      Text('Adaugă',
+                          style: TextStyle(
+                              color: Silk.primary,
+                              fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                ],
               ),
-              Divider(color: Silk.divider),
-              _ToggleRow(
-                title: 'Memento de studiu',
-                subtitle: 'Dacă n-am învățat încă (🕐 ${s.inactivityHour}:00)',
-                value: s.inactivityReminder,
-                onChanged: (on) =>
-                    ctrl.updateSettings(s.copyWith(inactivityReminder: on)),
-              ),
-              Divider(color: Silk.divider),
+              const SizedBox(height: 6),
+              Text(
+                  'Primești câte o notificare în fiecare zi, la orele alese. Poți pune câte vrei.',
+                  style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
+              const SizedBox(height: 12),
+              if (s.reminderTimes.isEmpty)
+                Text('Nicio oră — apasă „Adaugă".',
+                    style: TextStyle(color: Silk.onSurfaceVar))
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: s.reminderTimes
+                      .map((t) => GestureDetector(
+                            onTap: () {
+                              final list = [...s.reminderTimes]..remove(t);
+                              ctrl.updateSettings(
+                                  s.copyWith(reminderTimes: list));
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Silk.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                                border:
+                                    Border.all(color: Silk.primary, width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text('🕐 ${_fmt(t ~/ 60, t % 60)}',
+                                      style: TextStyle(
+                                          color: Silk.primary,
+                                          fontWeight: FontWeight.w700)),
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.close,
+                                      size: 14, color: Silk.primary),
+                                ],
+                              ),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              Divider(color: Silk.divider, height: 24),
               _ToggleRow(
                 title: 'Avertizare streak',
-                subtitle: 'Când streak-ul e pe cale să expire',
+                subtitle: 'Când streak-ul e pe cale să expire (21:30)',
                 value: s.streakWarning,
                 onChanged: (on) =>
                     ctrl.updateSettings(s.copyWith(streakWarning: on)),

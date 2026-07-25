@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../logic/plan_service.dart';
 import '../logic/session_runner.dart';
+import '../models/exam.dart';
 import '../state/tracker_provider.dart';
 import '../theme/silk.dart';
+import 'root_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/goal_ring.dart';
 import '../widgets/plan_block_tile.dart';
@@ -210,6 +212,8 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                   fontSize: 15, color: Silk.onSurfaceVar, height: 1.4),
             ),
           ),
+          const SizedBox(height: 14),
+          Center(child: _GoalPicker(goalMinutes: state.goal)),
           const SizedBox(height: 22),
           // buton principal (sus) — deschide alegerea modului; STOP cand ruleaza
           _SessionButton(
@@ -296,6 +300,8 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
               ],
             ),
           ),
+          // --- Examene apropiate ---
+          _ExamsSummary(),
           // --- Azi ai de făcut (plan) ---
           _TodayPlan(),
         ],
@@ -312,6 +318,159 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
 
 /// Lista cu ce ai planificat pentru azi (din tab-ul Plan). Apare doar daca
 /// exista blocuri planificate azi.
+/// Selector de obiectiv zilnic (in ore) direct pe Dashboard.
+class _GoalPicker extends ConsumerWidget {
+  final int goalMinutes;
+  const _GoalPicker({required this.goalMinutes});
+
+  String _fmt(int m) {
+    final h = m ~/ 60;
+    final mm = m % 60;
+    if (h > 0 && mm > 0) return '${h}h ${mm}min';
+    if (h > 0) return '${h}h';
+    return '${mm}min';
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ctrl = ref.read(trackerControllerProvider.notifier);
+    final settings = ref.read(trackerControllerProvider).settings;
+    void set(int m) =>
+        ctrl.updateSettings(settings.copyWith(dailyGoalMinutes: m.clamp(30, 1440)));
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('🎯 Obiectiv:',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Silk.onSurfaceVar)),
+        const SizedBox(width: 8),
+        NeuButton(
+          padding: const EdgeInsets.all(7),
+          radius: 12,
+          onTap: () => set(goalMinutes - 30),
+          child: const Icon(Icons.remove, color: Silk.primary, size: 18),
+        ),
+        SizedBox(
+          width: 64,
+          child: Text(_fmt(goalMinutes),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Silk.primary)),
+        ),
+        NeuButton(
+          padding: const EdgeInsets.all(7),
+          radius: 12,
+          onTap: () => set(goalMinutes + 30),
+          child: const Icon(Icons.add, color: Silk.primary, size: 18),
+        ),
+      ],
+    );
+  }
+}
+
+/// Examenele apropiate pe Dashboard. Avertizeaza daca un examen n-are plan
+/// de invatat. Tap -> merge in tab-ul Plan.
+class _ExamsSummary extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = DateTime.now();
+    final exams = ref
+        .watch(trackerControllerProvider)
+        .exams
+        .where((e) => e.daysUntil(now) >= 0)
+        .toList()
+      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    if (exams.isEmpty) return const SizedBox.shrink();
+
+    void goToPlan() => ref.read(tabIndexProvider.notifier).state = 1;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 20),
+      child: Neu(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Examene',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                GestureDetector(
+                  onTap: goToPlan,
+                  child: const Text('Vezi tot',
+                      style: TextStyle(
+                          color: Silk.primary, fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...exams.take(3).map((e) {
+              final days = e.daysUntil(now);
+              final hasPlan = e.hoursPerDay != null && e.hoursPerDay! > 0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GestureDetector(
+                  onTap: goToPlan,
+                  behavior: HitTestBehavior.opaque,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Color(e.colorValue),
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.school_rounded,
+                            color: Colors.white, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(e.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
+                            if (hasPlan)
+                              Text('${e.hoursPerDay}h/zi de studiu',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: Silk.success))
+                            else
+                              const Text('⚠️ Fără plan — apasă să faci unul',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Color(0xFFE5748A))),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        days == 0 ? 'AZI' : 'în $days ${days == 1 ? "zi" : "zile"}',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: days == 0
+                                ? const Color(0xFFE5484D)
+                                : Silk.primary),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TodayPlan extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {

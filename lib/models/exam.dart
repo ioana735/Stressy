@@ -25,6 +25,18 @@ extension ExamFormatX on ExamFormat {
       };
 }
 
+/// Paleta de culori pentru examene (ARGB int).
+const kExamColors = <int>[
+  0xFFE5484D, // rosu
+  0xFF6366F1, // indigo
+  0xFF7C3AED, // violet
+  0xFF22B07D, // verde
+  0xFFF2A93B, // portocaliu
+  0xFF0EA5E9, // albastru
+  0xFFEC4899, // roz
+  0xFF14B8A6, // teal
+];
+
 /// Un examen/eveniment pus pe calendar, cu data si ora.
 class Exam {
   final String id;
@@ -45,6 +57,9 @@ class Exam {
   final StudyStyle studyStyle;
   final ExamResult result;
 
+  /// Culoarea examenului pe calendar (ARGB int).
+  final int colorValue;
+
   const Exam({
     required this.id,
     required this.name,
@@ -56,6 +71,7 @@ class Exam {
     this.hoursPerDay,
     this.studyStyle = StudyStyle.spaced,
     this.result = ExamResult.pending,
+    this.colorValue = 0xFFE5484D,
   });
 
   /// Eticheta de tip pentru afisare (foloseste customLabel la "altele").
@@ -80,6 +96,7 @@ class Exam {
     int? hoursPerDay,
     StudyStyle? studyStyle,
     ExamResult? result,
+    int? colorValue,
   }) =>
       Exam(
         id: id,
@@ -92,6 +109,7 @@ class Exam {
         hoursPerDay: hoursPerDay ?? this.hoursPerDay,
         studyStyle: studyStyle ?? this.studyStyle,
         result: result ?? this.result,
+        colorValue: colorValue ?? this.colorValue,
       );
 
   Map<String, dynamic> toJson() => {
@@ -105,6 +123,7 @@ class Exam {
         'hoursPerDay': hoursPerDay,
         'studyStyle': studyStyle.index,
         'result': result.index,
+        'colorValue': colorValue,
       };
 
   factory Exam.fromJson(Map<String, dynamic> j) => Exam(
@@ -124,5 +143,6 @@ class Exam {
             .clamp(0, StudyStyle.values.length - 1)],
         result: ExamResult.values[((j['result'] as num?)?.toInt() ?? 0)
             .clamp(0, ExamResult.values.length - 1)],
+        colorValue: (j['colorValue'] as num?)?.toInt() ?? 0xFFE5484D,
       );
 }

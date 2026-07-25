@@ -1,17 +1,12 @@
 import 'study_style.dart';
 
-/// Setarile aplicatiei de tracking: obiectiv zilnic + preferinte remindere.
+/// Setarile aplicatiei: obiectiv zilnic + ore de reminder alese de user.
 class TrackerSettings {
   /// Obiectiv zilnic de studiu, in minute.
   final int dailyGoalMinutes;
 
-  /// Reminder la ora fixa (ex. 18:00). null => dezactivat.
-  final int? reminderHour;
-  final int? reminderMinute;
-
-  /// Memento daca nu ai invatat azi (verificat la [inactivityHour]).
-  final bool inactivityReminder;
-  final int inactivityHour;
+  /// Orele la care vin notificarile de reminder (minute din zi, ex. 1080=18:00).
+  final List<int> reminderTimes;
 
   /// Avertizare cand esti pe cale sa pierzi streak-ul.
   final bool streakWarning;
@@ -24,35 +19,28 @@ class TrackerSettings {
 
   const TrackerSettings({
     this.dailyGoalMinutes = 120,
-    this.reminderHour = 18,
-    this.reminderMinute = 0,
-    this.inactivityReminder = true,
-    this.inactivityHour = 20,
+    this.reminderTimes = const [1080], // 18:00
     this.streakWarning = true,
     this.studyStyle = StudyStyle.spaced,
     this.darkMode = false,
   });
 
-  bool get hasDailyReminder => reminderHour != null && reminderMinute != null;
+  /// Ora principala (pentru remindere de examen / calendar).
+  int get primaryHour =>
+      reminderTimes.isEmpty ? 18 : reminderTimes.first ~/ 60;
+  int get primaryMinute =>
+      reminderTimes.isEmpty ? 0 : reminderTimes.first % 60;
 
   TrackerSettings copyWith({
     int? dailyGoalMinutes,
-    int? reminderHour,
-    int? reminderMinute,
-    bool clearReminder = false,
-    bool? inactivityReminder,
-    int? inactivityHour,
+    List<int>? reminderTimes,
     bool? streakWarning,
     StudyStyle? studyStyle,
     bool? darkMode,
   }) =>
       TrackerSettings(
         dailyGoalMinutes: dailyGoalMinutes ?? this.dailyGoalMinutes,
-        reminderHour: clearReminder ? null : (reminderHour ?? this.reminderHour),
-        reminderMinute:
-            clearReminder ? null : (reminderMinute ?? this.reminderMinute),
-        inactivityReminder: inactivityReminder ?? this.inactivityReminder,
-        inactivityHour: inactivityHour ?? this.inactivityHour,
+        reminderTimes: reminderTimes ?? this.reminderTimes,
         streakWarning: streakWarning ?? this.streakWarning,
         studyStyle: studyStyle ?? this.studyStyle,
         darkMode: darkMode ?? this.darkMode,
@@ -60,25 +48,32 @@ class TrackerSettings {
 
   Map<String, dynamic> toJson() => {
         'dailyGoalMinutes': dailyGoalMinutes,
-        'reminderHour': reminderHour,
-        'reminderMinute': reminderMinute,
-        'inactivityReminder': inactivityReminder,
-        'inactivityHour': inactivityHour,
+        'reminderTimes': reminderTimes,
         'streakWarning': streakWarning,
         'studyStyle': studyStyle.index,
         'darkMode': darkMode,
       };
 
-  factory TrackerSettings.fromJson(Map<String, dynamic> j) => TrackerSettings(
-        dailyGoalMinutes: (j['dailyGoalMinutes'] as num?)?.toInt() ?? 120,
-        reminderHour: (j['reminderHour'] as num?)?.toInt(),
-        reminderMinute: (j['reminderMinute'] as num?)?.toInt(),
-        inactivityReminder: j['inactivityReminder'] as bool? ?? true,
-        inactivityHour: (j['inactivityHour'] as num?)?.toInt() ?? 20,
-        streakWarning: j['streakWarning'] as bool? ?? true,
-        studyStyle: StudyStyle.values[
-            ((j['studyStyle'] as num?)?.toInt() ?? 0)
-                .clamp(0, StudyStyle.values.length - 1)],
-        darkMode: j['darkMode'] as bool? ?? false,
-      );
+  factory TrackerSettings.fromJson(Map<String, dynamic> j) {
+    // migrare din formatul vechi (reminderHour) daca e cazul
+    List<int> times;
+    final raw = j['reminderTimes'] as List?;
+    if (raw != null) {
+      times = raw.map((e) => (e as num).toInt()).toList();
+    } else if (j['reminderHour'] != null) {
+      final h = (j['reminderHour'] as num).toInt();
+      final m = (j['reminderMinute'] as num?)?.toInt() ?? 0;
+      times = [h * 60 + m];
+    } else {
+      times = const [1080];
+    }
+    return TrackerSettings(
+      dailyGoalMinutes: (j['dailyGoalMinutes'] as num?)?.toInt() ?? 120,
+      reminderTimes: times,
+      streakWarning: j['streakWarning'] as bool? ?? true,
+      studyStyle: StudyStyle.values[((j['studyStyle'] as num?)?.toInt() ?? 0)
+          .clamp(0, StudyStyle.values.length - 1)],
+      darkMode: j['darkMode'] as bool? ?? false,
+    );
+  }
 }

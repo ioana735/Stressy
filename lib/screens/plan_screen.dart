@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -93,11 +95,15 @@ class _PlanViewState extends ConsumerState<PlanView> {
             ),
             eventLoader: (day) {
               final d = StatsService.dayOnly(day);
-              final hasExam = state.exams
-                  .any((e) => StatsService.dayOnly(e.dateTime) == d);
-              final hasPlan =
-                  PlanService.blocksForDay(state.blocks, day).isNotEmpty;
-              return [if (hasExam) 'exam', if (hasPlan) 'plan'];
+              // fiecare examen -> culoarea lui; plan -> violet
+              final markers = <Object>[
+                for (final e in state.exams)
+                  if (StatsService.dayOnly(e.dateTime) == d) Color(e.colorValue),
+              ];
+              if (PlanService.blocksForDay(state.blocks, day).isNotEmpty) {
+                markers.add('plan');
+              }
+              return markers;
             },
             calendarBuilders: CalendarBuilders(
               markerBuilder: (_, day, events) {
@@ -106,20 +112,16 @@ class _PlanViewState extends ConsumerState<PlanView> {
                   bottom: 4,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: events
-                        .map((e) => Container(
-                              width: 6,
-                              height: 6,
-                              margin:
-                                  const EdgeInsets.symmetric(horizontal: 1),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: e == 'exam'
-                                    ? const Color(0xFFE5484D)
-                                    : Silk.violet,
-                              ),
-                            ))
-                        .toList(),
+                    children: events.take(4).map((e) {
+                      final color = e is Color ? e : Silk.violet;
+                      return Container(
+                        width: 6,
+                        height: 6,
+                        margin: const EdgeInsets.symmetric(horizontal: 1),
+                        decoration: BoxDecoration(
+                            shape: BoxShape.circle, color: color),
+                      );
+                    }).toList(),
                   ),
                 );
               },
@@ -192,9 +194,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: past
-                              ? Silk.onSurfaceVar
-                              : const Color(0xFFE5484D),
+                          color: past ? Silk.onSurfaceVar : Color(e.colorValue),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         alignment: Alignment.center,
@@ -340,7 +340,7 @@ class _PlanViewState extends ConsumerState<PlanView> {
       exam: e,
       blocks: blocks,
       stamp: DateTime.now(),
-      reminderHour: state.settings.reminderHour ?? 18,
+      reminderHour: state.settings.primaryHour,
     );
     final safeName =
         e.name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
@@ -367,7 +367,8 @@ class _PlanViewState extends ConsumerState<PlanView> {
           initialDay: _selectedDay,
           initialStyle:
               ref.read(trackerControllerProvider).settings.studyStyle,
-          existing: edit),
+          existing: edit,
+          onDelete: edit == null ? null : () => ctrl.deleteExam(edit)),
     );
     if (exam == null) return;
     if (edit != null) {
@@ -477,8 +478,12 @@ class _ExamSheet extends StatefulWidget {
   final DateTime initialDay;
   final StudyStyle initialStyle;
   final Exam? existing; // != null => editare
+  final VoidCallback? onDelete;
   const _ExamSheet(
-      {required this.initialDay, required this.initialStyle, this.existing});
+      {required this.initialDay,
+      required this.initialStyle,
+      this.existing,
+      this.onDelete});
   @override
   State<_ExamSheet> createState() => _ExamSheetState();
 }
@@ -497,6 +502,8 @@ class _ExamSheetState extends State<_ExamSheet> {
 
   late ExamKind _kind = widget.existing?.kind ?? ExamKind.examen;
   late ExamFormat _format = widget.existing?.format ?? ExamFormat.scris;
+  late int _color = widget.existing?.colorValue ??
+      kExamColors[math.Random().nextInt(kExamColors.length)];
 
   late bool _autoPlan = widget.existing?.hoursPerDay != null;
   late int _hoursPerDay = widget.existing?.hoursPerDay ?? 2;
@@ -578,6 +585,54 @@ class _ExamSheetState extends State<_ExamSheet> {
                     child: _pill('Oral', _format == ExamFormat.oral,
                         () => setState(() => _format = ExamFormat.oral))),
               ],
+            ),
+            const SizedBox(height: 14),
+            // culoare
+            Row(
+              children: [
+                _lbl('CULOARE'),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => setState(() => _color = kExamColors[
+                      math.Random().nextInt(kExamColors.length)]),
+                  child: Row(children: [
+                    const Icon(Icons.shuffle_rounded,
+                        size: 16, color: Silk.primary),
+                    const SizedBox(width: 4),
+                    Text('Random',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Silk.primary,
+                            fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: kExamColors.map((c) {
+                final sel = _color == c;
+                return GestureDetector(
+                  onTap: () => setState(() => _color = c),
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: Color(c),
+                      shape: BoxShape.circle,
+                      border: sel
+                          ? Border.all(color: Silk.onSurface, width: 3)
+                          : null,
+                    ),
+                    child: sel
+                        ? const Icon(Icons.check,
+                            color: Colors.white, size: 18)
+                        : null,
+                  ),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 18),
             // data + ora
@@ -710,6 +765,7 @@ class _ExamSheetState extends State<_ExamSheet> {
                   hoursPerDay: _autoPlan ? _hoursPerDay : null,
                   studyStyle: widget.initialStyle,
                   result: widget.existing?.result ?? ExamResult.pending,
+                  colorValue: _color,
                 ));
               },
               child: Text(editing ? 'Salvează modificările' : 'Salvează examenul',
@@ -718,6 +774,23 @@ class _ExamSheetState extends State<_ExamSheet> {
                       fontWeight: FontWeight.w700,
                       color: Colors.white)),
             ),
+            if (editing && widget.onDelete != null) ...[
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).pop();
+                  widget.onDelete!();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  alignment: Alignment.center,
+                  child: const Text('🗑️  Șterge examenul',
+                      style: TextStyle(
+                          color: Color(0xFFE5484D),
+                          fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
           ],
         ),
       ),

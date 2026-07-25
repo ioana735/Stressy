@@ -17,9 +17,8 @@ class NotificationService {
   bool _ready = false;
 
   // ID-uri fixe ca sa putem rescrie/anula reminderele.
-  static const _idDaily = 100;
-  static const _idInactivity = 101;
-  static const _idStreak = 102;
+  static const _idDaily = 100; // remindere zilnice: 100..149
+  static const _idStreak = 190;
 
   static const _details = NotificationDetails(
     android: AndroidNotificationDetails(
@@ -76,23 +75,15 @@ class NotificationService {
     await _plugin.cancelAll();
     await _scheduleExams(s, exams);
 
-    if (s.hasDailyReminder) {
+    // cate o notificare zilnica pentru fiecare ora aleasa de user
+    var id = _idDaily;
+    for (final t in s.reminderTimes) {
       await _scheduleDaily(
-        _idDaily,
-        s.reminderHour!,
-        s.reminderMinute!,
+        id++,
+        t ~/ 60,
+        t % 60,
         'Timpul de studiu! 📚',
         'Hai sa bifezi obiectivul de azi (${s.dailyGoalMinutes} min).',
-      );
-    }
-
-    if (s.inactivityReminder && !studiedToday) {
-      await _scheduleDaily(
-        _idInactivity,
-        s.inactivityHour,
-        0,
-        'Inca n-ai invatat azi 👀',
-        'Mai e timp. Chiar si 15 minute conteaza!',
       );
     }
 
@@ -108,10 +99,10 @@ class NotificationService {
   }
 
   /// Programeaza remindere zilnice pentru fiecare examen, de la [Exam.notifyFrom]
-  /// pana in ziua examenului, la ora reminderului zilnic (sau 9:00).
+  /// pana in ziua examenului, la ora principala de reminder.
   Future<void> _scheduleExams(TrackerSettings s, List<Exam> exams) async {
-    final hour = s.reminderHour ?? 9;
-    final minute = s.reminderMinute ?? 0;
+    final hour = s.primaryHour;
+    final minute = s.primaryMinute;
     var id = 200; // ID-uri separate de reminderele generice
     final now = tz.TZDateTime.now(tz.local);
 
