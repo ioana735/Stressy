@@ -16,6 +16,11 @@ class PlanBlockTile extends StatelessWidget {
 
   final VoidCallback onToggleDone;
   final ValueChanged<int> onUnitDelta;
+  final VoidCallback? onDelete;
+
+  /// Eticheta tipului examenului din spate (ex. "Examen · Scris"), afisata
+  /// langa materie ca sa distingi task-uri de la examene diferite cu acelasi nume.
+  final String? categoryLabel;
 
   const PlanBlockTile({
     super.key,
@@ -23,6 +28,8 @@ class PlanBlockTile extends StatelessWidget {
     required this.onToggleDone,
     required this.onUnitDelta,
     this.studiedMinutes = 0,
+    this.onDelete,
+    this.categoryLabel,
   });
 
   bool get _quantityMode => block.hasTarget;
@@ -73,7 +80,10 @@ class PlanBlockTile extends StatelessWidget {
                   ),
                   // dreapta: pentru task pe timp arata studiat/estimat
                   if (_timeMode)
-                    Text('${_dur(studiedMinutes)} / ${_dur(block.plannedMinutes)}',
+                    Text(
+                        block.done && studiedMinutes < block.plannedMinutes
+                            ? 'Bifat manual'
+                            : '${_dur(studiedMinutes)} / ${_dur(block.plannedMinutes)}',
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
@@ -86,6 +96,12 @@ class PlanBlockTile extends StatelessWidget {
                             color: Silk.onSurfaceVar)),
                 ],
               ),
+              if (categoryLabel != null && categoryLabel!.isNotEmpty)
+                Text(categoryLabel!,
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Silk.primary)),
               if (block.note != null && block.note!.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
@@ -100,19 +116,15 @@ class PlanBlockTile extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
                   child: LinearProgressIndicator(
-                    value: (studiedMinutes / block.plannedMinutes)
-                        .clamp(0.0, 1.0),
+                    value: complete
+                        ? 1.0
+                        : (studiedMinutes / block.plannedMinutes)
+                            .clamp(0.0, 1.0),
                     minHeight: 7,
                     backgroundColor: Silk.track,
                     valueColor: AlwaysStoppedAnimation(
                         complete ? Silk.success : Silk.primary),
                   ),
-                ),
-                Padding(
-                  padding: EdgeInsets.only(top: 4),
-                  child: Text('se umple automat când studiezi materia',
-                      style: TextStyle(
-                          fontSize: 10, color: Silk.onSurfaceVar)),
                 ),
               ],
 
@@ -139,6 +151,16 @@ class PlanBlockTile extends StatelessWidget {
             ],
           ),
         ),
+        if (onDelete != null)
+          GestureDetector(
+            onTap: onDelete,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8, top: 1),
+              child: Icon(Icons.delete_outline,
+                  size: 20, color: Silk.onSurfaceVar),
+            ),
+          ),
       ],
     );
   }

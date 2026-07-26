@@ -92,7 +92,7 @@ void main() {
     await pumpApp(tester);
     await tester.tap(find.text('NOTE'));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('Adaugă'));
+    await tester.tap(find.text('Notă manuală'));
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Adaugă notă'), findsOneWidget);
     expect(find.text('Notele la această materie'), findsOneWidget);

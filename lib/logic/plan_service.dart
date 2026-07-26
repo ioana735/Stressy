@@ -25,6 +25,7 @@ class PlanService {
     required DateTime to,
     required int idSeed,
     required String examId,
+    String? note,
   }) {
     final start = StatsService.dayOnly(from);
     final end = StatsService.dayOnly(to);
@@ -38,6 +39,7 @@ class PlanService {
               subject: subject,
               plannedMinutes: minutesPerDay,
               examId: examId,
+              note: (note != null && note.trim().isNotEmpty) ? note.trim() : null,
             ));
   }
 
@@ -66,6 +68,22 @@ class PlanService {
             _sameSubject(s.subject, subject) &&
             StatsService.dayOnly(s.date) == d)
         .fold(0, (sum, s) => sum + s.minutes);
+  }
+
+  /// Minute studiate azi, grupate pe materie (in ordinea primei aparitii).
+  static List<MapEntry<String, int>> sessionsByDay(
+      List<StudySession> sessions, DateTime day) {
+    final d = StatsService.dayOnly(day);
+    final order = <String>[];
+    final totals = <String, int>{};
+    for (final s in sessions) {
+      if (StatsService.dayOnly(s.date) != d) continue;
+      final subj = (s.subject ?? '').trim();
+      if (subj.isEmpty) continue;
+      if (!totals.containsKey(subj)) order.add(subj);
+      totals[subj] = (totals[subj] ?? 0) + s.minutes;
+    }
+    return [for (final s in order) MapEntry(s, totals[s]!)];
   }
 
   /// Blocurile planificate pentru o zi.

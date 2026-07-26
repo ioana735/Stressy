@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../logic/grades_service.dart';
+import '../models/exam.dart';
 import '../models/subject_grade.dart';
 import '../state/tracker_provider.dart';
 import '../theme/silk.dart';
@@ -49,7 +50,7 @@ class _GradesViewState extends ConsumerState<GradesView> {
               child: const Row(children: [
                 Icon(Icons.add_circle, color: Silk.primary, size: 22),
                 SizedBox(width: 4),
-                Text('Adaugă',
+                Text('Notă manuală',
                     style: TextStyle(
                         color: Silk.primary, fontWeight: FontWeight.w700)),
               ]),
@@ -59,6 +60,10 @@ class _GradesViewState extends ConsumerState<GradesView> {
         const SizedBox(height: 4),
         Text('Mod: ${_uni ? "Facultate" : "Liceu"} · schimbă din Setări',
             style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
+        const SizedBox(height: 4),
+        Text(
+            '🔗 = notă din examen (adăugată din Plan) · restul le adaugi manual aici',
+            style: TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
         const SizedBox(height: 16),
 
         // selector an/semestru
@@ -83,24 +88,10 @@ class _GradesViewState extends ConsumerState<GradesView> {
         // card medie
         Neu(
           child: _uni
-              ? Row(
-                  children: [
-                    Expanded(
-                      child: _MediaBox(
-                          label: 'Media aritmetică',
-                          value: arithmetic,
-                          color: Silk.primary),
-                    ),
-                    Container(
-                        width: 1, height: 54, color: Silk.divider),
-                    Expanded(
-                      child: _MediaBox(
-                          label: 'Ponderată (credite)',
-                          value: weighted,
-                          color: Silk.violet),
-                    ),
-                  ],
-                )
+              ? _MediaBox(
+                  label: 'Media ponderată (credite)',
+                  value: weighted,
+                  color: Silk.violet)
               : _MediaBox(
                   label: 'Media generală',
                   value: arithmetic,
@@ -127,54 +118,81 @@ class _GradesViewState extends ConsumerState<GradesView> {
             ),
           )
         else
-          ...filtered.map((g) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Dismissible(
-                  key: ValueKey('grade_${g.id}'),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 24),
-                    decoration: BoxDecoration(
-                        color: const Color(0xFFE5484D),
-                        borderRadius: BorderRadius.circular(20)),
-                    child: Icon(Icons.delete, color: Colors.white),
-                  ),
-                  onDismissed: (_) => ctrl.deleteGrade(g),
-                  child: Neu(
-                    small: true,
-                    onTap: () => _openSheet(ctrl, edit: g),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+          ...filtered.map((g) {
+            final fromExam = g.id.startsWith('exam_');
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Dismissible(
+                key: ValueKey('grade_${g.id}'),
+                direction: fromExam
+                    ? DismissDirection.none
+                    : DismissDirection.endToStart,
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 24),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFE5484D),
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Icon(Icons.delete, color: Colors.white),
+                ),
+                onDismissed: (_) => ctrl.deleteGrade(g),
+                child: Neu(
+                  small: true,
+                  onTap: () => fromExam
+                      ? _editExamGrades(ctrl, g)
+                      : _openSheet(ctrl, edit: g),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
                               Text(g.subject,
                                   style: TextStyle(
                                       fontWeight: FontWeight.w700,
                                       color: Silk.onSurface)),
-                              Text(_subtitle(g),
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: Silk.onSurfaceVar)),
-                            ],
+                              if (fromExam) ...[
+                                const SizedBox(width: 6),
+                                Icon(Icons.link,
+                                    size: 13, color: Silk.onSurfaceVar),
+                              ],
+                            ]),
+                            Text(
+                                fromExam
+                                    ? '${_subtitle(g)} · din Plan'
+                                    : _subtitle(g),
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Silk.onSurfaceVar)),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        g.finalGrade == null
+                            ? '—'
+                            : g.finalGrade!.toStringAsFixed(2),
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Silk.primary),
+                      ),
+                      if (!fromExam)
+                        GestureDetector(
+                          onTap: () => ctrl.deleteGrade(g),
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 10),
+                            child: Icon(Icons.delete_outline,
+                                size: 20, color: Silk.onSurfaceVar),
                           ),
                         ),
-                        Text(
-                          g.finalGrade == null
-                              ? '—'
-                              : g.finalGrade!.toStringAsFixed(2),
-                          style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: Silk.primary),
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
                 ),
-              )),
+              ),
+            );
+          }),
       ],
     );
   }
@@ -213,6 +231,36 @@ class _GradesViewState extends ConsumerState<GradesView> {
         ),
       );
 
+  /// Grupul de examene din spatele unei note derivate (acelasi calcul de
+  /// cheie ca in TrackerController._rebuildExamGrades).
+  List<Exam> _examsFor(SubjectGrade g) {
+    final key = g.id.replaceFirst('exam_', '');
+    final exams = ref.read(trackerControllerProvider).exams;
+    return exams
+        .where((e) =>
+            (e.subject.trim().isNotEmpty ? e.subject.trim() : e.name)
+                .toLowerCase() ==
+            key)
+        .toList();
+  }
+
+  Future<void> _editExamGrades(TrackerController ctrl, SubjectGrade g) async {
+    final exams = _examsFor(g);
+    if (exams.isEmpty) return;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Silk.bg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (_) => _ExamGradesSheet(
+          subject: g.subject,
+          exams: exams,
+          university:
+              ref.read(trackerControllerProvider).settings.universityGrades),
+    );
+  }
+
   Future<void> _openSheet(TrackerController ctrl, {SubjectGrade? edit}) async {
     final g = await showModalBottomSheet<SubjectGrade>(
       context: context,
@@ -225,7 +273,32 @@ class _GradesViewState extends ConsumerState<GradesView> {
           university:
               ref.read(trackerControllerProvider).settings.universityGrades),
     );
-    if (g != null) ctrl.saveGrade(g);
+    if (g == null) return;
+
+    // la adaugare (nu editare), combina automat cu o nota manuala existenta
+    // la aceeasi materie + an + semestru, in loc sa creeze un card nou.
+    if (edit == null) {
+      final all = ref.read(trackerControllerProvider).grades;
+      final match = all.where((x) =>
+          !x.id.startsWith('exam_') &&
+          x.subject.trim().toLowerCase() == g.subject.trim().toLowerCase() &&
+          x.year == g.year &&
+          x.semester == g.semester);
+      if (match.isNotEmpty) {
+        final existing = match.first;
+        final merged = existing.copyWith(
+          credits: g.credits > 0 ? g.credits : existing.credits,
+          components: [...existing.components, ...g.components],
+          simpleGrades: [...existing.simpleGrades, ...g.simpleGrades],
+          directGrade: g.components.isEmpty && g.simpleGrades.isEmpty
+              ? g.directGrade
+              : existing.directGrade,
+        );
+        await ctrl.saveGrade(merged);
+        return;
+      }
+    }
+    await ctrl.saveGrade(g);
   }
 }
 
@@ -263,6 +336,9 @@ class _GradeSheet extends StatefulWidget {
 }
 
 class _GradeSheetState extends State<_GradeSheet> {
+  final _scrollCtrl = ScrollController();
+  final _subjectFocus = FocusNode();
+  bool _subjectError = false;
   late final _subject =
       TextEditingController(text: widget.existing?.subject ?? '');
   late final _directCtrl = TextEditingController(
@@ -270,7 +346,10 @@ class _GradeSheetState extends State<_GradeSheet> {
   late int _year = widget.existing?.year ?? 1;
   late int _semester = widget.existing?.semester ?? 1;
   late int _credits = widget.existing?.credits ?? 0;
-  late bool _useComponents = widget.existing?.components.isNotEmpty ?? false;
+  // la Facultate, incepe direct cu categorie+procent+nota (nu ascuns dupa switch)
+  late bool _useComponents = widget.existing == null
+      ? widget.university
+      : widget.existing!.components.isNotEmpty;
 
   // liceu: mai multe note simple
   late List<TextEditingController> _simple = (widget.existing?.simpleGrades ??
@@ -282,7 +361,7 @@ class _GradeSheetState extends State<_GradeSheet> {
   late List<_CompDraft> _comps = widget.existing?.components
           .map((c) => _CompDraft(c.name, c.grade.toString(), c.percent))
           .toList() ??
-      [_CompDraft('Examen', '', 60), _CompDraft('Seminar', '', 40)];
+      [_CompDraft('Scris', '', 60), _CompDraft('Test', '', 40)];
 
   @override
   void initState() {
@@ -294,6 +373,8 @@ class _GradeSheetState extends State<_GradeSheet> {
 
   @override
   void dispose() {
+    _scrollCtrl.dispose();
+    _subjectFocus.dispose();
     _subject.dispose();
     _directCtrl.dispose();
     for (final c in _simple) {
@@ -309,7 +390,13 @@ class _GradeSheetState extends State<_GradeSheet> {
 
   void _submit() {
     final subject = _subject.text.trim();
-    if (subject.isEmpty) return;
+    if (subject.isEmpty) {
+      setState(() => _subjectError = true);
+      _scrollCtrl.animateTo(0,
+          duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      _subjectFocus.requestFocus();
+      return;
+    }
 
     if (!widget.university) {
       // liceu: note simple -> medie aritmetica
@@ -363,6 +450,7 @@ class _GradeSheetState extends State<_GradeSheet> {
       padding: EdgeInsets.fromLTRB(
           24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 28),
       child: SingleChildScrollView(
+        controller: _scrollCtrl,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -376,10 +464,21 @@ class _GradeSheetState extends State<_GradeSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: TextField(
                 controller: _subject,
+                focusNode: _subjectFocus,
+                onChanged: (_) {
+                  if (_subjectError) setState(() => _subjectError = false);
+                },
                 decoration: const InputDecoration(
                     border: InputBorder.none, hintText: 'ex. Matematică'),
               ),
             ),
+            if (_subjectError)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Completează materia ca să salvezi nota.',
+                    style: TextStyle(
+                        fontSize: 11, color: const Color(0xFFE5484D))),
+              ),
             const SizedBox(height: 16),
             // an + semestru
             Row(
@@ -643,66 +742,412 @@ class _GradeSheetState extends State<_GradeSheet> {
     final c = _comps[i];
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 3,
-            child: NeuInset(
-              radius: 12,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-              child: TextField(
-                controller: c.nameCtrl,
-                decoration: const InputDecoration(
-                    border: InputBorder.none, hintText: 'Nume'),
-              ),
-            ),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: kCompKinds
+                .map((k) => GestureDetector(
+                      onTap: () => setState(() {
+                        c.kind = k;
+                        if (k != 'Altele') c.nameCtrl.text = k;
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: c.kind == k ? Silk.primary : Silk.bg,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: c.kind == k ? null : Silk.raisedSoft(),
+                        ),
+                        child: Text(k,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: c.kind == k
+                                    ? Colors.white
+                                    : Silk.onSurfaceVar)),
+                      ),
+                    ))
+                .toList(),
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            flex: 2,
-            child: NeuInset(
-              radius: 12,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-              child: TextField(
-                controller: c.gradeCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                    border: InputBorder.none, hintText: 'Notă'),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
+          const SizedBox(height: 6),
           Row(
             children: [
-              GestureDetector(
-                onTap: () =>
-                    setState(() => c.percent = (c.percent - 5).clamp(0, 100)),
-                child: Icon(Icons.remove, size: 16, color: Silk.primary),
+              Expanded(
+                flex: 3,
+                child: NeuInset(
+                  radius: 12,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                  child: TextField(
+                    controller: c.nameCtrl,
+                    enabled: c.kind == 'Altele',
+                    decoration: const InputDecoration(
+                        border: InputBorder.none, hintText: 'Nume'),
+                  ),
+                ),
               ),
-              SizedBox(
-                  width: 34,
-                  child: Text('${c.percent}%',
-                      textAlign: TextAlign.center,
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 2,
+                child: NeuInset(
+                  radius: 12,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  child: TextField(
+                    controller: c.gradeCtrl,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                        border: InputBorder.none, hintText: 'Notă'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => setState(
+                        () => c.percent = (c.percent - 5).clamp(0, 100)),
+                    child: Icon(Icons.remove, size: 16, color: Silk.primary),
+                  ),
+                  SizedBox(
+                      width: 34,
+                      child: Text('${c.percent}%',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700))),
+                  GestureDetector(
+                    onTap: () => setState(
+                        () => c.percent = (c.percent + 5).clamp(0, 100)),
+                    child: Icon(Icons.add, size: 16, color: Silk.primary),
+                  ),
+                ],
+              ),
+              if (_comps.length > 1)
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _comps.removeAt(i).dispose();
+                  }),
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 4),
+                    child:
+                        Icon(Icons.close, size: 16, color: Color(0xFFE5748A)),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Sheet de editare directa a notelor examenelor care compun o materie.
+/// Procentul (greutatea) ramane editabil doar din Plan; aici doar nota.
+class _ExamGradesSheet extends ConsumerStatefulWidget {
+  final String subject;
+  final List<Exam> exams;
+  final bool university;
+  const _ExamGradesSheet(
+      {required this.subject, required this.exams, required this.university});
+  @override
+  ConsumerState<_ExamGradesSheet> createState() => _ExamGradesSheetState();
+}
+
+class _ExamGradesSheetState extends ConsumerState<_ExamGradesSheet> {
+  late List<Exam> _exams = [...widget.exams];
+  late List<bool> _isNew = List.generate(widget.exams.length, (_) => false);
+  late List<TextEditingController> _nameCtrls =
+      widget.exams.map((e) => TextEditingController(text: e.name)).toList();
+  late List<TextEditingController> _gradeCtrls = widget.exams
+      .map((e) => TextEditingController(
+          text: e.grade == null
+              ? ''
+              : e.grade!.toStringAsFixed(e.grade! == e.grade!.roundToDouble() ? 0 : 2)))
+      .toList();
+  late List<int> _percents = widget.exams.map((e) => e.weightPercent).toList();
+  late List<String> _kinds = widget.exams.map((e) {
+    if (e.kindLabel == 'Test') return 'Test';
+    if (e.format == ExamFormat.scris) return 'Scris';
+    return 'Altele';
+  }).toList();
+
+  @override
+  void dispose() {
+    for (final c in _nameCtrls) {
+      c.dispose();
+    }
+    for (final c in _gradeCtrls) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  double? _parse(String s) => double.tryParse(s.trim().replaceAll(',', '.'));
+
+  void _addDraft() {
+    setState(() {
+      _exams.add(Exam(
+        id: 'draft_${DateTime.now().microsecondsSinceEpoch}',
+        name: '',
+        dateTime: DateTime.now(),
+        subject: widget.subject,
+        weightPercent: 20,
+      ));
+      _isNew.add(true);
+      _nameCtrls.add(TextEditingController(text: 'Scris'));
+      _gradeCtrls.add(TextEditingController());
+      _percents.add(20);
+      _kinds.add('Scris');
+    });
+  }
+
+  Future<void> _deleteExam(int i) async {
+    if (_isNew[i]) {
+      // draft nesalvat inca - se sterge direct, fara confirmare
+      setState(() {
+        _nameCtrls[i].dispose();
+        _gradeCtrls[i].dispose();
+        _nameCtrls.removeAt(i);
+        _gradeCtrls.removeAt(i);
+        _exams.removeAt(i);
+        _isNew.removeAt(i);
+        _percents.removeAt(i);
+        _kinds.removeAt(i);
+      });
+      return;
+    }
+    final exam = _exams[i];
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Silk.bg,
+        title: Text('Ștergi „${exam.name}"?'),
+        content: Text(
+            'Examenul și nota lui dispar din Plan și din Note, definitiv.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text('Anulează')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text('Șterge',
+                  style: TextStyle(color: const Color(0xFFE5484D)))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    ref.read(trackerControllerProvider.notifier).deleteExam(exam);
+    setState(() {
+      _nameCtrls[i].dispose();
+      _gradeCtrls[i].dispose();
+      _nameCtrls.removeAt(i);
+      _gradeCtrls.removeAt(i);
+      _exams.removeAt(i);
+      _isNew.removeAt(i);
+      _percents.removeAt(i);
+      _kinds.removeAt(i);
+    });
+    if (_exams.isEmpty && mounted) Navigator.of(context).pop();
+  }
+
+  (ExamKind, ExamFormat) _examFor(String kind) => switch (kind) {
+        'Test' => (ExamKind.test, ExamFormat.scris),
+        'Scris' => (ExamKind.examen, ExamFormat.scris),
+        _ => (ExamKind.altele, ExamFormat.none),
+      };
+
+  void _save() {
+    final ctrl = ref.read(trackerControllerProvider.notifier);
+    for (var i = 0; i < _exams.length; i++) {
+      final name = _nameCtrls[i].text.trim();
+      final (kind, format) = _examFor(_kinds[i]);
+      if (_isNew[i]) {
+        if (name.isEmpty) continue; // draft neinceput, ignora
+        final grade = _parse(_gradeCtrls[i].text);
+        ctrl.addExam(_exams[i].copyWith(
+          name: name,
+          weightPercent: _percents[i],
+          grade: grade,
+          kind: kind,
+          format: format,
+          customLabel: _kinds[i] == 'Altele' ? name : null,
+        ));
+        continue;
+      }
+      final exam = _exams[i];
+      final grade = _parse(_gradeCtrls[i].text);
+      if (grade != exam.grade ||
+          name != exam.name ||
+          _percents[i] != exam.weightPercent ||
+          kind != exam.kind ||
+          format != exam.format) {
+        ctrl.updateExam(exam.copyWith(
+          name: name.isEmpty ? exam.name : name,
+          weightPercent: _percents[i],
+          grade: grade,
+          clearGrade: grade == null,
+          kind: kind,
+          format: format,
+        ));
+      }
+    }
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 28),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SheetHeader('Note — ${widget.subject}'),
+            const SizedBox(height: 4),
+            Text(
+                widget.university
+                    ? 'Nume, notă și procent — editabile direct de aici.'
+                    : 'Media se calculează aritmetic din toate notele.',
+                style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
+            const SizedBox(height: 18),
+            ..._exams.asMap().entries.map((entry) => _examRow(entry.key)),
+            GestureDetector(
+              onTap: _addDraft,
+              child: const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: Row(children: [
+                  Icon(Icons.add_circle, color: Silk.primary, size: 20),
+                  SizedBox(width: 4),
+                  Text('Adaugă',
                       style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700))),
+                          color: Silk.primary, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+            ),
+            NeuButton(
+              filled: true,
+              onTap: _save,
+              child: Text('Salvează',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Rand identic ca structura cu _compRow din nota manuala: pill
+  /// Scris/Test/Altele, apoi nume (doar la Altele) + notă + procent + delete.
+  Widget _examRow(int i) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: kCompKinds
+                .map((k) => GestureDetector(
+                      onTap: () => setState(() {
+                        _kinds[i] = k;
+                        if (k != 'Altele') _nameCtrls[i].text = k;
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _kinds[i] == k ? Silk.primary : Silk.bg,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow:
+                              _kinds[i] == k ? null : Silk.raisedSoft(),
+                        ),
+                        child: Text(k,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: _kinds[i] == k
+                                    ? Colors.white
+                                    : Silk.onSurfaceVar)),
+                      ),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: NeuInset(
+                  radius: 12,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                  child: TextField(
+                    controller: _nameCtrls[i],
+                    enabled: _kinds[i] == 'Altele',
+                    decoration: const InputDecoration(
+                        border: InputBorder.none, hintText: 'Nume'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                flex: 2,
+                child: NeuInset(
+                  radius: 12,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  child: TextField(
+                    controller: _gradeCtrls[i],
+                    textAlign: TextAlign.center,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                        border: InputBorder.none, hintText: 'Notă'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (widget.university)
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => setState(() => _percents[i] =
+                          (_percents[i] - 5).clamp(0, 100)),
+                      child: Icon(Icons.remove, size: 16, color: Silk.primary),
+                    ),
+                    SizedBox(
+                        width: 34,
+                        child: Text('${_percents[i]}%',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w700))),
+                    GestureDetector(
+                      onTap: () => setState(() => _percents[i] =
+                          (_percents[i] + 5).clamp(0, 100)),
+                      child: Icon(Icons.add, size: 16, color: Silk.primary),
+                    ),
+                  ],
+                ),
               GestureDetector(
-                onTap: () =>
-                    setState(() => c.percent = (c.percent + 5).clamp(0, 100)),
-                child: Icon(Icons.add, size: 16, color: Silk.primary),
+                onTap: () => _deleteExam(i),
+                child: Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(Icons.close, size: 16, color: Color(0xFFE5748A)),
+                ),
               ),
             ],
           ),
-          if (_comps.length > 1)
-            GestureDetector(
-              onTap: () => setState(() {
-                _comps.removeAt(i).dispose();
-              }),
-              child: Padding(
-                padding: EdgeInsets.only(left: 4),
-                child: Icon(Icons.close, size: 16, color: Color(0xFFE5748A)),
-              ),
-            ),
         ],
       ),
     );
@@ -710,13 +1155,18 @@ class _GradeSheetState extends State<_GradeSheet> {
 }
 
 /// Draft mutabil pentru o componenta in editor.
+const kCompKinds = ['Scris', 'Test', 'Altele'];
+
 class _CompDraft {
   final TextEditingController nameCtrl;
   final TextEditingController gradeCtrl;
   int percent;
+  late String kind;
   _CompDraft(String name, String grade, this.percent)
       : nameCtrl = TextEditingController(text: name),
-        gradeCtrl = TextEditingController(text: grade);
+        gradeCtrl = TextEditingController(text: grade) {
+    kind = kCompKinds.contains(name) ? name : 'Altele';
+  }
   void dispose() {
     nameCtrl.dispose();
     gradeCtrl.dispose();

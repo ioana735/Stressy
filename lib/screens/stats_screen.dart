@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../logic/stats_service.dart';
-import '../models/exam.dart';
 import '../models/study_session.dart';
+import '../models/subject_grade.dart';
 import '../state/tracker_provider.dart';
 import '../theme/silk.dart';
-import '../widgets/result_celebration.dart';
+import 'root_screen.dart' show tabIndexProvider;
 
 class StatsView extends ConsumerWidget {
   const StatsView({super.key});
@@ -14,15 +14,12 @@ class StatsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(trackerControllerProvider);
-    final ctrl = ref.read(trackerControllerProvider.notifier);
 
-    final sessions = [...state.sessions]
-      ..sort((a, b) => b.date.compareTo(a.date));
+    final sessions = [...state.sessions];
     final grouped = <DateTime, List<StudySession>>{};
     for (final s in sessions) {
       grouped.putIfAbsent(StatsService.dayOnly(s.date), () => []).add(s);
     }
-    final days = grouped.keys.toList();
 
     // ziua cea mai productiva
     final bestDay = grouped.entries.fold<MapEntry<DateTime, int>?>(null, (b, e) {
@@ -31,13 +28,15 @@ class StatsView extends ConsumerWidget {
       return b;
     });
 
-    // promovabilitate (doar examene marcate)
-    final decided =
-        state.exams.where((e) => e.result != ExamResult.pending).toList();
-    final passed =
-        decided.where((e) => e.result == ExamResult.passed).length;
-    final passRate =
-        decided.isEmpty ? 0 : (passed / decided.length * 100).round();
+    // promovabilitate + materii slabe, calculate direct din notele reale (Note)
+    final graded =
+        state.grades.where((g) => g.finalGrade != null).toList();
+    final passedGrades = graded.where((g) => g.finalGrade! >= 5).length;
+    final passRate = graded.isEmpty
+        ? 0
+        : (passedGrades / graded.length * 100).round();
+    final weakSubjects = graded.where((g) => g.finalGrade! < 5).toList()
+      ..sort((a, b) => a.finalGrade!.compareTo(b.finalGrade!));
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(22, 16, 22, 24),
@@ -84,125 +83,50 @@ class StatsView extends ConsumerWidget {
         ),
         const SizedBox(height: 24),
 
-        // --- Promovabilitate ---
-        if (decided.isNotEmpty) ...[
+        // --- Promovabilitate (din note) ---
+        if (graded.isNotEmpty) ...[
           _PassRateCard(
             passRate: passRate,
-            passed: passed,
-            total: decided.length,
+            passed: passedGrades,
+            total: graded.length,
           ),
           const SizedBox(height: 24),
         ],
 
-        // --- Rezultate examene ---
-        if (state.exams.isNotEmpty) ...[
-          Text('Examenele mele',
+        // --- Materii sub 5, de invatat mai mult ---
+        if (weakSubjects.isNotEmpty) ...[
+          Text('Ai nevoie să înveți mai mult la',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           const SizedBox(height: 12),
-          ...([...state.exams]..sort((a, b) => b.dateTime.compareTo(a.dateTime)))
-              .map((e) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _ExamResultTile(
-                      exam: e,
-                      onSet: (r) async {
-                        await ctrl.setExamResult(e, r);
-                        if (context.mounted && r != ExamResult.pending) {
-                          await showResultCelebration(context,
-                              passed: r == ExamResult.passed);
-                        }
-                      },
+          ...weakSubjects.map((g) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GestureDetector(
+                  onTap: () => ref.read(tabIndexProvider.notifier).state = 2,
+                  child: Neu(
+                    small: true,
+                    child: Row(
+                      children: [
+                        const Text('⚠️', style: TextStyle(fontSize: 20)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(g.subject,
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Silk.onSurface)),
+                        ),
+                        Text(g.finalGrade!.toStringAsFixed(2),
+                            style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFFE5484D))),
+                      ],
                     ),
-                  )),
+                  ),
+                ),
+              )),
           const SizedBox(height: 24),
         ],
 
-        if (sessions.isEmpty)
-          Padding(
-            padding: EdgeInsets.only(top: 40),
-            child: Center(
-              child: Text(
-                  'Încă nicio sesiune.\nApasă START pe Dashboard.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Silk.onSurfaceVar)),
-            ),
-          )
-        else
-          ...days.expand((day) {
-            final items = grouped[day]!;
-            final total = items.fold(0, (s, x) => s + x.minutes);
-            return [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(4, 8, 4, 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(_dayLabel(day).toUpperCase(),
-                        style: TextStyle(
-                            fontSize: 12,
-                            letterSpacing: 1,
-                            fontWeight: FontWeight.w800,
-                            color: Silk.onSurfaceVar)),
-                    Text('$total min',
-                        style: TextStyle(
-                            color: Silk.primary,
-                            fontWeight: FontWeight.w700)),
-                  ],
-                ),
-              ),
-              ...items.map((s) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Dismissible(
-                      key: ValueKey(
-                          s.date.toIso8601String() + s.minutes.toString()),
-                      direction: DismissDirection.endToStart,
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 24),
-                        decoration: BoxDecoration(
-                            color: const Color(0xFFE5484D),
-                            borderRadius: BorderRadius.circular(20)),
-                        child: Icon(Icons.delete, color: Colors.white),
-                      ),
-                      onDismissed: (_) => ctrl.deleteSession(s),
-                      child: Neu(
-                        small: true,
-                        radius: 20,
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            const Neu(
-                                small: true,
-                                radius: 14,
-                                padding: EdgeInsets.all(10),
-                                child: Icon(Icons.psychology_outlined,
-                                    color: Silk.primary, size: 22)),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(s.subject ?? 'Sesiune de studiu',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          color: Silk.onSurface)),
-                                  Text(_time(s.date),
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: Silk.onSurfaceVar)),
-                                ],
-                              ),
-                            ),
-                            Text('${s.minutes} min',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: Silk.onSurface)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )),
-            ];
-          }),
       ],
     );
   }
@@ -213,24 +137,9 @@ class StatsView extends ConsumerWidget {
     return h > 0 ? '${h}h ${m}m' : '${m}m';
   }
 
-  String _time(DateTime d) =>
-      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
-
-  static const _months = [
-    'ian', 'feb', 'mar', 'apr', 'mai', 'iun',
-    'iul', 'aug', 'sep', 'oct', 'noi', 'dec'
-  ];
-
-  String _dayLabel(DateTime d) {
-    final now = StatsService.dayOnly(DateTime.now());
-    final diff = now.difference(d).inDays;
-    if (diff == 0) return 'Azi';
-    if (diff == 1) return 'Ieri';
-    return '${d.day} ${_months[d.month - 1]} ${d.year}';
-  }
 }
 
-/// Card cu rata de promovare (câte examene ai trecut din cele susținute).
+/// Card cu rata de promovare (câte materii cu notă >= 5 din cele notate).
 class _PassRateCard extends StatelessWidget {
   final int passRate;
   final int passed;
@@ -275,7 +184,7 @@ class _PassRateCard extends StatelessWidget {
               const SizedBox(width: 12),
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Text('$passed din $total examene',
+                child: Text('$passed din $total materii',
                     style: TextStyle(
                         fontSize: 14, color: Silk.onSurfaceVar)),
               ),
@@ -296,112 +205,6 @@ class _PassRateCard extends StatelessWidget {
               style: TextStyle(
                   fontSize: 13, color: Silk.onSurfaceVar)),
         ],
-      ),
-    );
-  }
-}
-
-class _ExamResultTile extends StatelessWidget {
-  final Exam exam;
-  final ValueChanged<ExamResult> onSet;
-  const _ExamResultTile({required this.exam, required this.onSet});
-
-  @override
-  Widget build(BuildContext context) {
-    final passed = exam.result == ExamResult.passed;
-    final failed = exam.result == ExamResult.failed;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Silk.surface,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(passed ? '🏆' : (failed ? '🌱' : '🎓'),
-                  style: TextStyle(fontSize: 24)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(exam.name,
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: Silk.onSurface)),
-                    Text(
-                        '${exam.dateTime.day}.${exam.dateTime.month}.${exam.dateTime.year}',
-                        style: TextStyle(
-                            fontSize: 12, color: Silk.onSurfaceVar)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _ResultBtn(
-                  label: 'Am trecut',
-                  emoji: '✅',
-                  selected: passed,
-                  color: Silk.success,
-                  onTap: () => onSet(ExamResult.passed),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ResultBtn(
-                  label: 'N-am trecut',
-                  emoji: '💪',
-                  selected: failed,
-                  color: const Color(0xFFE5748A),
-                  onTap: () => onSet(ExamResult.failed),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ResultBtn extends StatelessWidget {
-  final String label;
-  final String emoji;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
-  const _ResultBtn({
-    required this.label,
-    required this.emoji,
-    required this.selected,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? color : Silk.track,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text('$emoji  $label',
-            style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-                color: selected ? Colors.white : Silk.onSurfaceVar)),
       ),
     );
   }

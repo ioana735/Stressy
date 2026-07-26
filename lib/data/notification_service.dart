@@ -103,10 +103,20 @@ class NotificationService {
   Future<void> _scheduleExams(TrackerSettings s, List<Exam> exams) async {
     final hour = s.primaryHour;
     final minute = s.primaryMinute;
-    var id = 200; // ID-uri separate de reminderele generice
     final now = tz.TZDateTime.now(tz.local);
 
-    for (final exam in exams) {
+    // ID-uri separate de reminderele generice, cate un bloc rezervat per
+    // examen (200..899) ca un examen cu multe zile sa nu ii lase pe
+    // urmatoarele fara notificari.
+    const rangeStart = 200;
+    const rangeEnd = 900;
+    const perExam = 45;
+    final slot = ((rangeEnd - rangeStart) / perExam).floor().clamp(1, 999);
+
+    for (var ei = 0; ei < exams.length && ei < slot; ei++) {
+      final exam = exams[ei];
+      var id = rangeStart + ei * perExam;
+      final idLimit = (rangeStart + (ei + 1) * perExam).clamp(0, rangeEnd);
       final start = exam.notifyFrom ?? now;
       var day = tz.TZDateTime(
           tz.local, start.year, start.month, start.day, hour, minute);
@@ -115,7 +125,7 @@ class NotificationService {
 
       // maxim 45 de notificari per examen (siguranta)
       var count = 0;
-      while (!day.isAfter(examDay) && count < 45 && id < 900) {
+      while (!day.isAfter(examDay) && count < perExam && id < idLimit) {
         if (day.isAfter(now)) {
           final daysLeft = examDay.difference(day).inDays;
           await _plugin.zonedSchedule(

@@ -159,9 +159,14 @@ class SettingsView extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Orele la care vrei notificări',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700, color: Silk.onSurface)),
+                  Expanded(
+                    child: Text('Orele la care vrei notificări',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Silk.onSurface)),
+                  ),
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () async {
                       final picked = await showTimePicker(
@@ -339,17 +344,17 @@ class SettingsView extends ConsumerWidget {
             children: [
               Text(
                   'Am copiat backup-ul în clipboard. Lipește-l undeva sigur (Notițe, email, mesaj către tine). Ca să restaurezi, apeși „Importă datele" și lipești textul.',
-                  style: TextStyle(fontSize: 13)),
+                  style: TextStyle(fontSize: 13, color: Silk.onSurface)),
               const SizedBox(height: 12),
               Container(
                 constraints: const BoxConstraints(maxHeight: 120),
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                    color: const Color(0xFFDFE2EA),
+                    color: Silk.inset,
                     borderRadius: BorderRadius.circular(10)),
                 child: SingleChildScrollView(
                   child: SelectableText(data,
-                      style: TextStyle(fontSize: 10)),
+                      style: TextStyle(fontSize: 10, color: Silk.onSurface)),
                 ),
               ),
             ],

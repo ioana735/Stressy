@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../logic/plan_service.dart';
 import '../logic/session_runner.dart';
+import '../models/exam.dart';
+import '../models/planned_block.dart';
 import '../state/tracker_provider.dart';
 import '../theme/silk.dart';
 import 'root_screen.dart';
@@ -33,13 +35,25 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
     super.dispose();
   }
 
+  /// Materii sugerate rapid: task-urile de azi + toate examenele active,
+  /// ca lista de sugestii sa nu fie goala doar pentru ca azi nu ai plan.
   List<String> _todaySubjects() {
-    final blocks = PlanService.blocksForDay(
-        ref.read(trackerControllerProvider).blocks, DateTime.now());
+    final state = ref.read(trackerControllerProvider);
+    final gradedExamIds = {
+      for (final e in state.exams) if (e.grade != null) e.id
+    };
+    final blocks = PlanService.blocksForDay(state.blocks, DateTime.now())
+        .where((b) => b.examId == null || !gradedExamIds.contains(b.examId));
     final seen = <String>{};
     final out = <String>[];
     for (final b in blocks) {
       if (seen.add(b.subject.toLowerCase())) out.add(b.subject);
+    }
+    for (final e in state.exams) {
+      // daca ai pus deja nota, examenul a trecut - nu mai are rost sa apara
+      // ca sugestie de "unde sa inveti".
+      if (e.grade != null) continue;
+      if (seen.add(e.name.toLowerCase())) out.add(e.name);
     }
     return out;
   }
@@ -470,14 +484,37 @@ class _ExamsSummary extends ConsumerWidget {
   }
 }
 
+/// Eticheta "Examen · Scris" pentru task-urile generate dintr-un examen.
+String? _categoryFor(PlannedBlock b, List<Exam> exams) {
+  if (b.examId == null) return null;
+  final matches = exams.where((x) => x.id == b.examId);
+  if (matches.isEmpty) return null;
+  final e = matches.first;
+  return e.format == ExamFormat.none
+      ? e.kindLabel
+      : '${e.kindLabel} · ${e.format.label}';
+}
+
 class _TodayPlan extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(trackerControllerProvider);
     final ctrl = ref.read(trackerControllerProvider.notifier);
     final now = DateTime.now();
-    final blocks = PlanService.blocksForDay(state.blocks, now);
-    if (blocks.isEmpty) return const SizedBox.shrink();
+    final gradedExamIds = {
+      for (final e in state.exams) if (e.grade != null) e.id
+    };
+    final blocks = PlanService.blocksForDay(state.blocks, now)
+        .where((b) => b.examId == null || !gradedExamIds.contains(b.examId))
+        .toList();
+
+    // materii studiate azi care nu sunt in niciun task din plan (sesiuni libere)
+    final planSubjects = blocks.map((b) => b.subject.toLowerCase()).toSet();
+    final extras = PlanService.sessionsByDay(state.sessions, now)
+        .where((e) => !planSubjects.contains(e.key.toLowerCase()))
+        .toList();
+
+    if (blocks.isEmpty && extras.isEmpty) return const SizedBox.shrink();
 
     bool blockDone(b) {
       if (b.isComplete) return true;
@@ -517,12 +554,67 @@ class _TodayPlan extends ConsumerWidget {
                         state.sessions, b.subject, now),
                     onToggleDone: () => ctrl.toggleBlockDone(b),
                     onUnitDelta: (d) => ctrl.changeBlockUnits(b, d),
+                    onDelete: () => ctrl.deleteBlock(b),
+                    categoryLabel: _categoryFor(b, state.exams),
                   ),
                 )),
+            if (extras.isNotEmpty) ...[
+              if (blocks.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Divider(color: Silk.divider),
+                const SizedBox(height: 8),
+              ],
+              Text('În afara planului',
+                  style: TextStyle(
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                      fontWeight: FontWeight.w700,
+                      color: Silk.onSurfaceVar)),
+              const SizedBox(height: 8),
+              ...extras.map((e) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle,
+                            color: Silk.success, size: 22),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(e.key,
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Silk.onSurface)),
+                        ),
+                        Text(_minLabel(e.value),
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Silk.primary)),
+                        GestureDetector(
+                          onTap: () => ctrl.deleteSessionsForSubjectOnDay(
+                              e.key, now),
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 10),
+                            child: Icon(Icons.delete_outline,
+                                size: 20, color: Silk.onSurfaceVar),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  String _minLabel(int m) {
+    final h = m ~/ 60;
+    final mm = m % 60;
+    if (h > 0 && mm > 0) return '${h}h ${mm}m';
+    if (h > 0) return '${h}h';
+    return '${mm}m';
   }
 }
 

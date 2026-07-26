@@ -166,6 +166,21 @@ class TrackerController extends StateNotifier<TrackerState> {
     _syncNotifications();
   }
 
+  /// Sterge toate sesiunile de studiu la o materie, intr-o anumita zi
+  /// (folosit pentru sesiunile "in afara planului" de pe Dashboard).
+  Future<void> deleteSessionsForSubjectOnDay(String subject, DateTime day) async {
+    final d = StatsService.dayOnly(day);
+    final updated = state.sessions
+        .where((s) =>
+            !((s.subject ?? '').trim().toLowerCase() ==
+                    subject.trim().toLowerCase() &&
+                StatsService.dayOnly(s.date) == d))
+        .toList();
+    await _storage.saveSessions(updated);
+    state = state.copyWith(sessions: updated);
+    _syncNotifications();
+  }
+
   // --- Obiective pe materie ---
   Future<void> setGoal(String subject, int weeklyMinutes) async {
     final goals = [...state.goals];
@@ -294,12 +309,15 @@ class TrackerController extends StateNotifier<TrackerState> {
     _syncNotifications();
   }
 
-  /// Reconstruieste notele din examene: grupeaza examenele pe materie si le
-  /// combina intr-o singura nota ponderata (fiecare examen = componenta %).
+  /// Reconstruieste notele din examene: grupeaza examenele pe materie.
   /// Materie goala => nota separata (grupata dupa numele examenului).
+  ///
+  /// Liceu: medie aritmetica simpla a notelor (procentul din examen e ignorat).
+  /// Facultate: medie ponderata pe procentul fiecarui examen (componente).
   List<SubjectGrade> _rebuildExamGrades(List<Exam> exams) {
     // pastreaza notele adaugate manual (id-uri fara prefix 'exam_')
     final kept = state.grades.where((g) => !g.id.startsWith('exam_')).toList();
+    final uni = state.settings.universityGrades;
 
     final groups = <String, List<Exam>>{};
     for (final e in exams) {
@@ -314,19 +332,25 @@ class TrackerController extends StateNotifier<TrackerState> {
       final first = list.first;
       final display =
           first.subject.trim().isNotEmpty ? first.subject.trim() : first.name;
-      final comps = [
-        for (final e in list)
-          if (e.grade != null)
-            GradeComponent(
-                name: e.name, grade: e.grade!, percent: e.weightPercent),
-      ];
+      // creditele/anul/semestrul se preiau de la primul examen din grup care
+      // le are setate, ca sa fie de-ajuns sa le pui o singura data pe grup.
+      final withCredits = list.firstWhere((e) => e.credits > 0, orElse: () => first);
+      final grades = [for (final e in list) if (e.grade != null) e.grade!];
       examGrades.add(SubjectGrade(
         id: 'exam_${entry.key}',
         subject: display,
         year: first.year,
         semester: first.semester,
-        credits: first.credits,
-        components: comps,
+        credits: uni ? withCredits.credits : 0,
+        components: uni
+            ? [
+                for (final e in list)
+                  if (e.grade != null)
+                    GradeComponent(
+                        name: e.name, grade: e.grade!, percent: e.weightPercent),
+              ]
+            : const [],
+        simpleGrades: uni ? const [] : grades,
       ));
     }
     return [...kept, ...examGrades];
@@ -344,6 +368,7 @@ class TrackerController extends StateNotifier<TrackerState> {
       to: safeTo,
       idSeed: DateTime.now().microsecondsSinceEpoch,
       examId: exam.id,
+      note: exam.planNote,
     );
   }
 

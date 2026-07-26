@@ -26,9 +26,13 @@ class SessionRunner {
   final void Function(SessionPhase newPhase)? onPhaseChange;
 
   Timer? _t;
-  int _workedSec = 0;
-  int _phaseElapsed = 0;
+
+  // Bazat pe ceasul real (nu pe numarul de tick-uri), ca sa nu ramana in urma
+  // cand iOS/Android incetinesc Timer-ul in fundal (ecran stins, app minimizat).
+  int _workedSecBeforePhase = 0; // secunde de lucru acumulate in fazele anterioare
+  DateTime _phaseStartAt = DateTime.now();
   SessionPhase _phase = SessionPhase.work;
+  bool _finished = false;
 
   SessionRunner({
     required this.stopwatch,
@@ -41,34 +45,43 @@ class SessionRunner {
     this.onPhaseChange,
   });
 
-  int get workedMinutes => (_workedSec / 60).round();
-  int get workedSeconds => _workedSec;
+  int get _phaseElapsed =>
+      DateTime.now().difference(_phaseStartAt).inSeconds;
+
+  int get workedSeconds => _phase == SessionPhase.work
+      ? _workedSecBeforePhase + _phaseElapsed
+      : _workedSecBeforePhase;
+  int get workedMinutes => (workedSeconds / 60).round();
   SessionPhase get phase => _phase;
 
   void start() {
+    _phaseStartAt = DateTime.now();
     _emit();
     _t = Timer.periodic(const Duration(seconds: 1), (_) => _step());
   }
 
   void _step() {
+    if (_finished) return;
+    final elapsed = _phaseElapsed;
     if (_phase == SessionPhase.work) {
-      _workedSec++;
-      _phaseElapsed++;
-      if (!stopwatch && _workedSec >= targetWorkSeconds) {
+      final worked = _workedSecBeforePhase + elapsed;
+      if (!stopwatch && worked >= targetWorkSeconds) {
+        _finished = true;
         _t?.cancel();
+        _workedSecBeforePhase = targetWorkSeconds;
         onFinish(workedMinutes);
         return;
       }
-      if (breaksEnabled && _phaseElapsed >= workBlockSeconds) {
+      if (breaksEnabled && elapsed >= workBlockSeconds) {
+        _workedSecBeforePhase = worked;
         _phase = SessionPhase.breakTime;
-        _phaseElapsed = 0;
+        _phaseStartAt = DateTime.now();
         onPhaseChange?.call(_phase);
       }
     } else {
-      _phaseElapsed++;
-      if (_phaseElapsed >= breakBlockSeconds) {
+      if (elapsed >= breakBlockSeconds) {
         _phase = SessionPhase.work;
-        _phaseElapsed = 0;
+        _phaseStartAt = DateTime.now();
         onPhaseChange?.call(_phase); // pauza s-a incheiat
       }
     }
@@ -76,13 +89,14 @@ class SessionRunner {
   }
 
   void _emit() {
+    final elapsed = _phaseElapsed;
     int display;
     if (_phase == SessionPhase.breakTime) {
-      display = breakBlockSeconds - _phaseElapsed;
+      display = breakBlockSeconds - elapsed;
     } else if (stopwatch) {
-      display = _workedSec; // numara in sus
+      display = _workedSecBeforePhase + elapsed; // numara in sus
     } else {
-      display = targetWorkSeconds - _workedSec; // ramas
+      display = targetWorkSeconds - (_workedSecBeforePhase + elapsed); // ramas
     }
     onTick(_phase, display < 0 ? 0 : display);
   }

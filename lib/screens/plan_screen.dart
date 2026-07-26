@@ -134,25 +134,34 @@ class _PlanViewState extends ConsumerState<PlanView> {
           children: [
             Text('Examene',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            Row(children: [
-              if (state.exams.isNotEmpty)
-                GestureDetector(
-                  onTap: () => _exportAllToCalendar(),
-                  child: const Icon(Icons.calendar_month_rounded,
-                      color: Silk.primary, size: 22),
+            Flexible(
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (state.exams.isNotEmpty)
+                  GestureDetector(
+                    onTap: () => _exportAllToCalendar(),
+                    child: const Icon(Icons.calendar_month_rounded,
+                        color: Silk.primary, size: 22),
+                  ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: GestureDetector(
+                    onTap: () => _addExamSheet(ctrl),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.add_circle,
+                          color: Silk.primary, size: 20),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text('Adaugă examen',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: Silk.primary,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ]),
+                  ),
                 ),
-              const SizedBox(width: 16),
-              GestureDetector(
-                onTap: () => _addExamSheet(ctrl),
-                child: const Row(children: [
-                  Icon(Icons.add_circle, color: Silk.primary, size: 20),
-                  SizedBox(width: 4),
-                  Text('Adaugă',
-                      style: TextStyle(
-                          color: Silk.primary, fontWeight: FontWeight.w700)),
-                ]),
-              ),
-            ]),
+              ]),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -236,24 +245,8 @@ class _PlanViewState extends ConsumerState<PlanView> {
         const SizedBox(height: 24),
 
         // --- planul zilei selectate ---
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(_dayLabel(_selectedDay),
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w800)),
-            GestureDetector(
-              onTap: () => _addBlockSheet(ctrl),
-              child: const Row(children: [
-                Icon(Icons.add_circle, color: Silk.primary, size: 20),
-                SizedBox(width: 4),
-                Text('Adaugă',
-                    style: TextStyle(
-                        color: Silk.primary, fontWeight: FontWeight.w700)),
-              ]),
-            ),
-          ],
-        ),
+        Text(_dayLabel(_selectedDay),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         if (dayBlocks.isEmpty)
           Neu(
@@ -282,6 +275,8 @@ class _PlanViewState extends ConsumerState<PlanView> {
                         state.sessions, b.subject, b.date),
                     onToggleDone: () => ctrl.toggleBlockDone(b),
                     onUnitDelta: (d) => ctrl.changeBlockUnits(b, d),
+                    onDelete: () => ctrl.deleteBlock(b),
+                    categoryLabel: _categoryFor(b, state.exams),
                   ),
                 ),
               ),
@@ -290,6 +285,17 @@ class _PlanViewState extends ConsumerState<PlanView> {
 
       ],
     );
+  }
+
+  /// Eticheta "Examen · Scris" pentru task-urile generate dintr-un examen.
+  String? _categoryFor(PlannedBlock b, List<Exam> exams) {
+    if (b.examId == null) return null;
+    final matches = exams.where((x) => x.id == b.examId);
+    if (matches.isEmpty) return null;
+    final e = matches.first;
+    return e.format == ExamFormat.none
+        ? e.kindLabel
+        : '${e.kindLabel} · ${e.format.label}';
   }
 
   Widget _delBg() => Container(
@@ -302,18 +308,6 @@ class _PlanViewState extends ConsumerState<PlanView> {
       );
 
   // ---------- bottom sheets ----------
-
-  Future<void> _addBlockSheet(TrackerController ctrl) async {
-    final block = await showModalBottomSheet<PlannedBlock>(
-      context: context,
-      backgroundColor: Silk.bg,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (_) => _BlockSheet(day: _selectedDay, dayLabel: _dayLabel(_selectedDay)),
-    );
-    if (block != null) ctrl.addBlock(block);
-  }
 
   /// Exporta TOATE examenele + planurile lor intr-un fisier .ics (Calendar).
   Future<void> _exportAllToCalendar() async {
@@ -349,7 +343,9 @@ class _PlanViewState extends ConsumerState<PlanView> {
           initialStyle:
               ref.read(trackerControllerProvider).settings.studyStyle,
           existing: edit,
-          onDelete: edit == null ? null : () => ctrl.deleteExam(edit)),
+          onDelete: edit == null ? null : () => ctrl.deleteExam(edit),
+          university:
+              ref.read(trackerControllerProvider).settings.universityGrades),
     );
     if (exam == null) return;
     if (edit != null) {
@@ -450,11 +446,13 @@ class _ExamSheet extends StatefulWidget {
   final StudyStyle initialStyle;
   final Exam? existing; // != null => editare
   final VoidCallback? onDelete;
+  final bool university;
   const _ExamSheet(
       {required this.initialDay,
       required this.initialStyle,
       this.existing,
-      this.onDelete});
+      this.onDelete,
+      required this.university});
   @override
   State<_ExamSheet> createState() => _ExamSheetState();
 }
@@ -480,6 +478,8 @@ class _ExamSheetState extends State<_ExamSheet> {
   late int _hoursPerDay = widget.existing?.hoursPerDay ?? 2;
   late DateTime _notifyFrom = widget.existing?.notifyFrom ??
       StatsService.dayOnly(DateTime.now());
+  late final _planNoteCtrl =
+      TextEditingController(text: widget.existing?.planNote ?? '');
 
   // pentru sincronizarea cu Note
   late int _year = widget.existing?.year ?? 1;
@@ -487,8 +487,6 @@ class _ExamSheetState extends State<_ExamSheet> {
   late int _credits = widget.existing?.credits ?? 0;
   late final _gradeCtrl = TextEditingController(
       text: widget.existing?.grade?.toString() ?? '');
-  late final _subjectCtrl =
-      TextEditingController(text: widget.existing?.subject ?? '');
   late int _weight = widget.existing?.weightPercent ?? 100;
 
   @override
@@ -496,7 +494,7 @@ class _ExamSheetState extends State<_ExamSheet> {
     _ctrl.dispose();
     _customCtrl.dispose();
     _gradeCtrl.dispose();
-    _subjectCtrl.dispose();
+    _planNoteCtrl.dispose();
     super.dispose();
   }
 
@@ -631,7 +629,17 @@ class _ExamSheetState extends State<_ExamSheet> {
                             DateTime.now().subtract(const Duration(days: 1)),
                         lastDate: DateTime.now().add(const Duration(days: 730)),
                       );
-                      if (p != null) setState(() => _date = p);
+                      if (p != null) {
+                        setState(() {
+                          _date = p;
+                          // planul trebuie sa se termine inainte de examen
+                          if (!_notifyFrom.isBefore(
+                              StatsService.dayOnly(p))) {
+                            _notifyFrom = StatsService.dayOnly(
+                                p.subtract(const Duration(days: 1)));
+                          }
+                        });
+                      }
                     },
                     child: _field('DATA',
                         '${_date.day}.${_date.month}.${_date.year}'),
@@ -723,6 +731,21 @@ class _ExamSheetState extends State<_ExamSheet> {
                       child: _field('ÎNCEP SĂ ÎNVĂȚ DIN',
                           '${_notifyFrom.day}.${_notifyFrom.month}.${_notifyFrom.year}'),
                     ),
+                    const SizedBox(height: 10),
+                    _lbl('CE AI DE FĂCUT ÎN FIECARE ZI (opțional)'),
+                    const SizedBox(height: 6),
+                    NeuInset(
+                      radius: 12,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      child: TextField(
+                        controller: _planNoteCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            hintText: 'ex. Cap. 3-5 + exerciții'),
+                      ),
+                    ),
                   ],
                 ],
               ),
@@ -736,59 +759,69 @@ class _ExamSheetState extends State<_ExamSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Materie (curs) — lasă gol dacă e o singură notă',
+                  Text(
+                      'Se grupează automat cu alte examene care au exact același nume mai sus.',
                       style:
                           TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
-                  const SizedBox(height: 6),
-                  NeuInset(
-                    radius: 12,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                    child: TextField(
-                      controller: _subjectCtrl,
-                      decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          hintText: 'ex. Programare (grupează examenele)'),
+                  const SizedBox(height: 14),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _labeledStepper('AN', _year,
+                            (d) => setState(() => _year = (_year + d).clamp(1, 6))),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _lbl('SEMESTRU'),
+                            const SizedBox(height: 8),
+                            Row(children: [
+                              Expanded(child: _semMini(1)),
+                              const SizedBox(width: 8),
+                              Expanded(child: _semMini(2)),
+                            ]),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (widget.university) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _labeledStepper('CREDITE', _credits,
+                              (d) => setState(
+                                  () => _credits = (_credits + d).clamp(0, 60))),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _labeledStepper('CÂT CONTEAZĂ ÎN NOTĂ',
+                              _weight,
+                              (d) => setState(() =>
+                                  _weight = (_weight + d * 5).clamp(5, 100)),
+                              suffix: '%'),
+                        ),
+                      ],
                     ),
-                  ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    Text('Media se calculează aritmetic din toate notele.',
+                        style: TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
+                  ],
+                  const SizedBox(height: 14),
+                  Divider(color: Silk.divider),
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Text('Cât contează în notă:',
-                          style: TextStyle(color: Silk.onSurfaceVar)),
-                      const Spacer(),
-                      _miniStep('', _weight,
-                          (d) => setState(() =>
-                              _weight = (_weight + d * 5).clamp(5, 100))),
-                      Text(' %',
-                          style: const TextStyle(fontWeight: FontWeight.w800)),
-                    ],
-                  ),
-                  const Divider(color: Color(0x11000000)),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 10,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _miniStep('An', _year,
-                          (d) => setState(() => _year = (_year + d).clamp(1, 6))),
-                      Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text('Sem ', style: TextStyle(color: Silk.onSurfaceVar)),
-                        _semMini(1),
-                        const SizedBox(width: 6),
-                        _semMini(2),
-                      ]),
-                      _miniStep('Credite', _credits,
-                          (d) => setState(
-                              () => _credits = (_credits + d).clamp(0, 60))),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Text('Nota (dacă ai luat-o):',
-                          style: TextStyle(color: Silk.onSurfaceVar)),
+                      Flexible(
+                        child: Text('Nota (dacă ai luat-o):',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: Silk.onSurfaceVar)),
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: NeuInset(
@@ -836,8 +869,11 @@ class _ExamSheetState extends State<_ExamSheet> {
                   credits: _credits,
                   grade: double.tryParse(
                       _gradeCtrl.text.trim().replaceAll(',', '.')),
-                  subject: _subjectCtrl.text.trim(),
+                  subject: widget.existing?.subject ?? '',
                   weightPercent: _weight,
+                  planNote: _autoPlan && _planNoteCtrl.text.trim().isNotEmpty
+                      ? _planNoteCtrl.text.trim()
+                      : null,
                 ));
               },
               child: Text(editing ? 'Salvează modificările' : 'Salvează examenul',
@@ -876,45 +912,58 @@ class _ExamSheetState extends State<_ExamSheet> {
           fontWeight: FontWeight.w800,
           color: Silk.onSurfaceVar));
 
-  Widget _miniStep(String label, int value, ValueChanged<int> onDelta) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('$label ', style: TextStyle(color: Silk.onSurfaceVar)),
-          GestureDetector(
-              onTap: () => onDelta(-1),
-              child: const Icon(Icons.remove_circle_outline,
-                  size: 20, color: Silk.primary)),
-          SizedBox(
-              width: 24,
-              child: Text('$value',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.w800))),
-          GestureDetector(
-              onTap: () => onDelta(1),
-              child: const Icon(Icons.add_circle_outline,
-                  size: 20, color: Silk.primary)),
-        ],
-      );
-
   Widget _semMini(int s) {
     final sel = _semester == s;
     return GestureDetector(
       onTap: () => setState(() => _semester = s),
       child: Container(
-        width: 28,
-        height: 28,
+        height: 40,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: sel ? Silk.primary : Silk.bg,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: sel ? null : Silk.raisedSoft(),
         ),
         child: Text('$s',
             style: TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 13,
+                fontSize: 14,
                 color: sel ? Colors.white : Silk.onSurfaceVar)),
       ),
+    );
+  }
+
+  /// Stepper cu eticheta deasupra, pe toata latimea disponibila.
+  Widget _labeledStepper(String label, int value, ValueChanged<int> onDelta,
+      {String suffix = ''}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _lbl(label),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            NeuButton(
+              padding: const EdgeInsets.all(9),
+              radius: 10,
+              onTap: () => onDelta(-1),
+              child: Icon(Icons.remove, color: Silk.primary, size: 16),
+            ),
+            Expanded(
+              child: Text('$value$suffix',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w800)),
+            ),
+            NeuButton(
+              padding: const EdgeInsets.all(9),
+              radius: 10,
+              onTap: () => onDelta(1),
+              child: Icon(Icons.add, color: Silk.primary, size: 16),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -955,234 +1004,4 @@ class _ExamSheetState extends State<_ExamSheet> {
       );
 }
 
-const _units = ['pagini', 'capitole', 'exerciții', 'seminarii', 'cursuri', 'lecții'];
-
-/// Sheet bogat pentru un task: titlu + ce ai de facut + tinta optionala + timp.
-class _BlockSheet extends StatefulWidget {
-  final DateTime day;
-  final String dayLabel;
-  const _BlockSheet({required this.day, required this.dayLabel});
-  @override
-  State<_BlockSheet> createState() => _BlockSheetState();
-}
-
-class _BlockSheetState extends State<_BlockSheet> {
-  final _subject = TextEditingController();
-  final _note = TextEditingController();
-  bool _hasTarget = false;
-  int _target = 20;
-  String _unit = 'pagini';
-  int _minutes = 60;
-
-  @override
-  void dispose() {
-    _subject.dispose();
-    _note.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-          24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 28),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SheetHeader('Task — ${widget.dayLabel}'),
-            const SizedBox(height: 20),
-            _label('MATERIE'),
-            const SizedBox(height: 8),
-            NeuInset(
-              radius: 16,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: TextField(
-                controller: _subject,
-                decoration: const InputDecoration(
-                    border: InputBorder.none, hintText: 'ex. Programare'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _subjects
-                  .map((s) => GestureDetector(
-                        onTap: () => setState(() => _subject.text = s),
-                        child: Neu(
-                          small: true,
-                          radius: 12,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          child: Text(s,
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Silk.onSurfaceVar,
-                                  fontWeight: FontWeight.w600)),
-                        ),
-                      ))
-                  .toList(),
-            ),
-            const SizedBox(height: 18),
-            _label('CE AI DE FĂCUT / NOTIȚE'),
-            const SizedBox(height: 8),
-            NeuInset(
-              radius: 16,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              child: TextField(
-                controller: _note,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'ex. Citește pag. 20–45, Seminar 3...'),
-              ),
-            ),
-            const SizedBox(height: 18),
-            // tinta cantitativa
-            Neu(
-              small: true,
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text('Țintă (pagini, exerciții...)',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Silk.onSurface)),
-                      ),
-                      Switch(
-                        value: _hasTarget,
-                        activeThumbColor: Colors.white,
-                        activeTrackColor: Silk.primary,
-                        onChanged: (v) => setState(() => _hasTarget = v),
-                      ),
-                    ],
-                  ),
-                  if (_hasTarget) ...[
-                    Divider(color: Silk.divider),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        NeuButton(
-                          padding: const EdgeInsets.all(10),
-                          radius: 12,
-                          onTap: () => setState(
-                              () => _target = (_target - 5).clamp(1, 100000)),
-                          child: Icon(Icons.remove,
-                              color: Silk.primary, size: 18),
-                        ),
-                        SizedBox(
-                            width: 70,
-                            child: Text('$_target',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800))),
-                        NeuButton(
-                          padding: const EdgeInsets.all(10),
-                          radius: 12,
-                          onTap: () => setState(
-                              () => _target = (_target + 5).clamp(1, 100000)),
-                          child: Icon(Icons.add,
-                              color: Silk.primary, size: 18),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      alignment: WrapAlignment.center,
-                      children: _units
-                          .map((u) => GestureDetector(
-                                onTap: () => setState(() => _unit = u),
-                                child: Neu(
-                                  small: true,
-                                  radius: 12,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
-                                  child: Text(u,
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: _unit == u
-                                              ? Silk.primary
-                                              : Silk.onSurfaceVar,
-                                          fontWeight: FontWeight.w700)),
-                                ),
-                              ))
-                          .toList(),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            _label('TIMP ESTIMAT (opțional)'),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                NeuButton(
-                  padding: const EdgeInsets.all(12),
-                  radius: 14,
-                  onTap: () =>
-                      setState(() => _minutes = (_minutes - 15).clamp(0, 1440)),
-                  child: Icon(Icons.remove, color: Silk.primary),
-                ),
-                SizedBox(
-                  width: 110,
-                  child: Text(_minutes == 0 ? 'fără' : _fmt(_minutes),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 22, fontWeight: FontWeight.w700)),
-                ),
-                NeuButton(
-                  padding: const EdgeInsets.all(12),
-                  radius: 14,
-                  onTap: () =>
-                      setState(() => _minutes = (_minutes + 15).clamp(0, 1440)),
-                  child: Icon(Icons.add, color: Silk.primary),
-                ),
-              ],
-            ),
-            const SizedBox(height: 26),
-            NeuButton(
-              filled: true,
-              onTap: () {
-                final subject = _subject.text.trim();
-                if (subject.isEmpty) return;
-                final note = _note.text.trim();
-                Navigator.of(context).pop(PlannedBlock(
-                  id: DateTime.now().microsecondsSinceEpoch.toString(),
-                  date: widget.day,
-                  subject: subject,
-                  note: note.isEmpty ? null : note,
-                  plannedMinutes: _minutes,
-                  targetUnits: _hasTarget ? _target : null,
-                  unitLabel: _hasTarget ? _unit : null,
-                ));
-              },
-              child: Text('Adaugă în plan',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _label(String t) => Text(t,
-      style: TextStyle(
-          fontSize: 11,
-          letterSpacing: 1,
-          fontWeight: FontWeight.w800,
-          color: Silk.onSurfaceVar));
-}
 

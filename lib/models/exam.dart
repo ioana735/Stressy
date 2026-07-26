@@ -73,6 +73,9 @@ class Exam {
   /// Cat conteaza acest examen in nota materiei (%).
   final int weightPercent;
 
+  /// Ce ai de facut in fiecare zi din planul auto-generat (ex. "Cap. 3-5, exerciții").
+  final String? planNote;
+
   const Exam({
     required this.id,
     required this.name,
@@ -91,6 +94,7 @@ class Exam {
     this.grade,
     this.subject = '',
     this.weightPercent = 100,
+    this.planNote,
   });
 
   /// Eticheta de tip pentru afisare (foloseste customLabel la "altele").
@@ -123,6 +127,8 @@ class Exam {
     bool clearGrade = false,
     String? subject,
     int? weightPercent,
+    String? planNote,
+    bool clearPlanNote = false,
   }) =>
       Exam(
         id: id,
@@ -142,6 +148,7 @@ class Exam {
         grade: clearGrade ? null : (grade ?? this.grade),
         subject: subject ?? this.subject,
         weightPercent: weightPercent ?? this.weightPercent,
+        planNote: clearPlanNote ? null : (planNote ?? this.planNote),
       );
 
   Map<String, dynamic> toJson() => {
@@ -162,6 +169,7 @@ class Exam {
         'grade': grade,
         'subject': subject,
         'weightPercent': weightPercent,
+        'planNote': planNote,
       };
 
   factory Exam.fromJson(Map<String, dynamic> j) => Exam(
@@ -188,5 +196,6 @@ class Exam {
         grade: (j['grade'] as num?)?.toDouble(),
         subject: j['subject'] as String? ?? '',
         weightPercent: (j['weightPercent'] as num?)?.toInt() ?? 100,
+        planNote: j['planNote'] as String?,
       );
 }
