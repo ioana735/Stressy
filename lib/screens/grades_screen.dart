@@ -14,12 +14,13 @@ class GradesView extends ConsumerStatefulWidget {
 
 class _GradesViewState extends ConsumerState<GradesView> {
   (int, int)? _period; // null = toate
-  bool _uni = false; // false = liceu, true = facultate
 
   @override
   Widget build(BuildContext context) {
-    final all = ref.watch(trackerControllerProvider).grades;
+    final state = ref.watch(trackerControllerProvider);
+    final all = state.grades;
     final ctrl = ref.read(trackerControllerProvider.notifier);
+    final _uni = state.settings.universityGrades;
     final periods = GradesService.periods(all);
 
     final filtered = _period == null
@@ -55,16 +56,9 @@ class _GradesViewState extends ConsumerState<GradesView> {
             ),
           ],
         ),
-        const SizedBox(height: 14),
-
-        // toggle liceu / facultate
-        Row(
-          children: [
-            Expanded(child: _modePill('Liceu', !_uni, () => setState(() => _uni = false))),
-            const SizedBox(width: 10),
-            Expanded(child: _modePill('Facultate', _uni, () => setState(() => _uni = true))),
-          ],
-        ),
+        const SizedBox(height: 4),
+        Text('Mod: ${_uni ? "Facultate" : "Liceu"} · schimbă din Setări',
+            style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
         const SizedBox(height: 16),
 
         // selector an/semestru
@@ -197,24 +191,6 @@ class _GradesViewState extends ConsumerState<GradesView> {
     return parts.join(' · ');
   }
 
-  Widget _modePill(String label, bool selected, VoidCallback onTap) =>
-      GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? Silk.primary : Silk.bg,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: selected ? null : Silk.raisedSoft(),
-          ),
-          child: Text(label,
-              style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: selected ? Colors.white : Silk.onSurfaceVar)),
-        ),
-      );
-
   Widget _periodPill(String label, bool selected, VoidCallback onTap) =>
       Padding(
         padding: const EdgeInsets.only(right: 8),
@@ -244,7 +220,10 @@ class _GradesViewState extends ConsumerState<GradesView> {
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (_) => _GradeSheet(existing: edit, university: _uni),
+      builder: (_) => _GradeSheet(
+          existing: edit,
+          university:
+              ref.read(trackerControllerProvider).settings.universityGrades),
     );
     if (g != null) ctrl.saveGrade(g);
   }

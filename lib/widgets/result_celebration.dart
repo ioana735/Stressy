@@ -49,7 +49,9 @@ class _ResultDialogState extends State<_ResultDialog>
   @override
   Widget build(BuildContext context) {
     final passed = widget.passed;
-    return Stack(
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
       children: [
         if (passed)
           Positioned.fill(
@@ -113,6 +115,7 @@ class _ResultDialogState extends State<_ResultDialog>
           ),
         ),
       ],
+    ),
     );
   }
 }

@@ -89,4 +89,46 @@ class IcsService {
     cal.writeln('END:VCALENDAR');
     return cal.toString();
   }
+
+  /// Calendar cu TOATE examenele + planurile lor de studiu.
+  static String allExamsCalendar({
+    required List<Exam> exams,
+    required List<PlannedBlock> blocks,
+    required DateTime stamp,
+    int reminderHour = 18,
+  }) {
+    final cal = StringBuffer()
+      ..writeln('BEGIN:VCALENDAR')
+      ..writeln('VERSION:2.0')
+      ..writeln('PRODID:-//Stressy//RO')
+      ..writeln('CALSCALE:GREGORIAN');
+
+    for (final exam in exams) {
+      cal.write(_event(
+        uid: 'exam_${exam.id}',
+        start: exam.dateTime,
+        end: exam.dateTime.add(const Duration(hours: 1)),
+        summary: '${exam.kindLabel}: ${exam.name}',
+        description: 'Examen (${exam.format.label}) — mult succes!',
+        stamp: stamp,
+        alarmBefore: const Duration(days: 1),
+      ));
+      for (final b in blocks.where((b) => b.examId == exam.id)) {
+        final start =
+            DateTime(b.date.year, b.date.month, b.date.day, reminderHour, 0);
+        cal.write(_event(
+          uid: 'block_${b.id}',
+          start: start,
+          end: start.add(Duration(minutes: b.plannedMinutes)),
+          summary: 'Studiază: ${b.subject}',
+          description: 'Sesiune pentru ${exam.name}.',
+          stamp: stamp,
+          alarmBefore: Duration.zero,
+        ));
+      }
+    }
+
+    cal.writeln('END:VCALENDAR');
+    return cal.toString();
+  }
 }

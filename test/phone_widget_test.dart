@@ -63,8 +63,7 @@ void main() {
     await tester.tap(find.text('NOTE'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Note'), findsWidgets);
-    expect(find.text('Liceu'), findsOneWidget);
-    expect(find.text('Facultate'), findsOneWidget);
+    expect(find.text('Adaugă prima materie cu nota ta.'), findsOneWidget);
 
     // Stats
     await tester.tap(find.text('STATS'));

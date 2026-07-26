@@ -17,12 +17,16 @@ class TrackerSettings {
   /// Mod intunecat.
   final bool darkMode;
 
+  /// Mod note: false = liceu (medie aritmetica), true = facultate (credite).
+  final bool universityGrades;
+
   const TrackerSettings({
     this.dailyGoalMinutes = 120,
     this.reminderTimes = const [1080], // 18:00
     this.streakWarning = true,
     this.studyStyle = StudyStyle.spaced,
     this.darkMode = false,
+    this.universityGrades = false,
   });
 
   /// Ora principala (pentru remindere de examen / calendar).
@@ -37,6 +41,7 @@ class TrackerSettings {
     bool? streakWarning,
     StudyStyle? studyStyle,
     bool? darkMode,
+    bool? universityGrades,
   }) =>
       TrackerSettings(
         dailyGoalMinutes: dailyGoalMinutes ?? this.dailyGoalMinutes,
@@ -44,6 +49,7 @@ class TrackerSettings {
         streakWarning: streakWarning ?? this.streakWarning,
         studyStyle: studyStyle ?? this.studyStyle,
         darkMode: darkMode ?? this.darkMode,
+        universityGrades: universityGrades ?? this.universityGrades,
       );
 
   Map<String, dynamic> toJson() => {
@@ -52,6 +58,7 @@ class TrackerSettings {
         'streakWarning': streakWarning,
         'studyStyle': studyStyle.index,
         'darkMode': darkMode,
+        'universityGrades': universityGrades,
       };
 
   factory TrackerSettings.fromJson(Map<String, dynamic> j) {
@@ -74,6 +81,7 @@ class TrackerSettings {
       studyStyle: StudyStyle.values[((j['studyStyle'] as num?)?.toInt() ?? 0)
           .clamp(0, StudyStyle.values.length - 1)],
       darkMode: j['darkMode'] as bool? ?? false,
+      universityGrades: j['universityGrades'] as bool? ?? false,
     );
   }
 }

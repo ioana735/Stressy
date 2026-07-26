@@ -7,11 +7,16 @@ import '../state/tracker_provider.dart';
 import '../theme/silk.dart';
 
 /// Pagina de setari (deschisa din rotita de pe Dashboard, cu buton de inapoi).
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // urmarim darkMode ca tot Scaffold-ul (inclusiv fundalul) sa se reconstruiasca
+    // imediat ce comuti modul intunecat din aceasta pagina
+    final dark = ref.watch(
+        trackerControllerProvider.select((s) => s.settings.darkMode));
+    Silk.dark = dark;
     return Scaffold(
       backgroundColor: Silk.bg,
       appBar: AppBar(
@@ -117,6 +122,28 @@ class SettingsView extends ConsumerWidget {
                       fontSize: 12,
                       fontStyle: FontStyle.italic,
                       color: Silk.onSurfaceVar)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // --- Mod note ---
+        _Label(icon: Icons.grade_outlined, text: 'MOD NOTE'),
+        const SizedBox(height: 10),
+        Neu(
+          child: Row(
+            children: [
+              Expanded(
+                child: _pill('Liceu', !s.universityGrades,
+                    () => ctrl.updateSettings(
+                        s.copyWith(universityGrades: false))),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _pill('Facultate', s.universityGrades,
+                    () => ctrl.updateSettings(
+                        s.copyWith(universityGrades: true))),
+              ),
             ],
           ),
         ),
@@ -398,6 +425,23 @@ class SettingsView extends ConsumerWidget {
   }
 }
 
+Widget _pill(String label, bool selected, VoidCallback onTap) => GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? Silk.primary : Silk.bg,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: selected ? null : Silk.raisedSoft(),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : Silk.onSurfaceVar)),
+      ),
+    );
+
 class _Label extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -422,14 +466,12 @@ class _ToggleRow extends StatelessWidget {
   final String subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
-  final VoidCallback? onSubtitleTap;
 
   const _ToggleRow({
     required this.title,
     required this.subtitle,
     required this.value,
     required this.onChanged,
-    this.onSubtitleTap,
   });
 
   @override
@@ -448,18 +490,8 @@ class _ToggleRow extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                         color: Silk.onSurface)),
                 const SizedBox(height: 2),
-                GestureDetector(
-                  onTap: onSubtitleTap,
-                  child: Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: onSubtitleTap != null
-                              ? Silk.primary
-                              : Silk.onSurfaceVar,
-                          fontWeight: onSubtitleTap != null
-                              ? FontWeight.w700
-                              : FontWeight.w400)),
-                ),
+                Text(subtitle,
+                    style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
               ],
             ),
           ),

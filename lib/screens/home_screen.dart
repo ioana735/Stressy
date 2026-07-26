@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../logic/plan_service.dart';
 import '../logic/session_runner.dart';
-import '../models/exam.dart';
 import '../state/tracker_provider.dart';
 import '../theme/silk.dart';
 import 'root_screen.dart';

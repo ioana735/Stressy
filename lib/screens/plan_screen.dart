@@ -95,15 +95,11 @@ class _PlanViewState extends ConsumerState<PlanView> {
             ),
             eventLoader: (day) {
               final d = StatsService.dayOnly(day);
-              // fiecare examen -> culoarea lui; plan -> violet
-              final markers = <Object>[
+              // doar examenele -> culoarea fiecaruia (fara punctele de plan)
+              return [
                 for (final e in state.exams)
                   if (StatsService.dayOnly(e.dateTime) == d) Color(e.colorValue),
               ];
-              if (PlanService.blocksForDay(state.blocks, day).isNotEmpty) {
-                markers.add('plan');
-              }
-              return markers;
             },
             calendarBuilders: CalendarBuilders(
               markerBuilder: (_, day, events) {
@@ -113,13 +109,12 @@ class _PlanViewState extends ConsumerState<PlanView> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: events.take(4).map((e) {
-                      final color = e is Color ? e : Silk.violet;
                       return Container(
                         width: 6,
                         height: 6,
                         margin: const EdgeInsets.symmetric(horizontal: 1),
                         decoration: BoxDecoration(
-                            shape: BoxShape.circle, color: color),
+                            shape: BoxShape.circle, color: e as Color),
                       );
                     }).toList(),
                   ),
@@ -128,20 +123,9 @@ class _PlanViewState extends ConsumerState<PlanView> {
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        // legenda
-        Row(
-          children: [
-            _Dot(color: Color(0xFFE5484D)),
-            SizedBox(width: 4),
-            Text('Examen', style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
-            SizedBox(width: 16),
-            _Dot(color: Silk.violet),
-            SizedBox(width: 4),
-            Text('Plan de studiu',
-                style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
-          ],
-        ),
+        const SizedBox(height: 8),
+        Text('● Fiecare punct colorat = un examen',
+            style: TextStyle(fontSize: 12, color: Silk.onSurfaceVar)),
         const SizedBox(height: 20),
 
         // --- examene apropiate ---
@@ -150,16 +134,25 @@ class _PlanViewState extends ConsumerState<PlanView> {
           children: [
             Text('Examene',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            GestureDetector(
-              onTap: () => _addExamSheet(ctrl),
-              child: const Row(children: [
-                Icon(Icons.add_circle, color: Silk.primary, size: 20),
-                SizedBox(width: 4),
-                Text('Adaugă',
-                    style: TextStyle(
-                        color: Silk.primary, fontWeight: FontWeight.w700)),
-              ]),
-            ),
+            Row(children: [
+              if (state.exams.isNotEmpty)
+                GestureDetector(
+                  onTap: () => _exportAllToCalendar(),
+                  child: const Icon(Icons.calendar_month_rounded,
+                      color: Silk.primary, size: 22),
+                ),
+              const SizedBox(width: 16),
+              GestureDetector(
+                onTap: () => _addExamSheet(ctrl),
+                child: const Row(children: [
+                  Icon(Icons.add_circle, color: Silk.primary, size: 20),
+                  SizedBox(width: 4),
+                  Text('Adaugă',
+                      style: TextStyle(
+                          color: Silk.primary, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+            ]),
           ],
         ),
         const SizedBox(height: 12),
@@ -217,16 +210,6 @@ class _PlanViewState extends ConsumerState<PlanView> {
                                 style: TextStyle(
                                     fontSize: 12, color: Silk.onSurfaceVar)),
                           ],
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () => _exportToCalendar(e),
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: EdgeInsets.all(4),
-                          child: Icon(Icons.calendar_month_rounded,
-                              color: Silk.primary, size: 22),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -332,19 +315,17 @@ class _PlanViewState extends ConsumerState<PlanView> {
     if (block != null) ctrl.addBlock(block);
   }
 
-  /// Exporta examenul + planul lui ca fisier .ics (Calendar iOS/Android).
-  Future<void> _exportToCalendar(Exam e) async {
+  /// Exporta TOATE examenele + planurile lor intr-un fisier .ics (Calendar).
+  Future<void> _exportAllToCalendar() async {
     final state = ref.read(trackerControllerProvider);
-    final blocks = state.blocks.where((b) => b.examId == e.id).toList();
-    final ics = IcsService.examCalendar(
-      exam: e,
-      blocks: blocks,
+    final ics = IcsService.allExamsCalendar(
+      exams: state.exams,
+      blocks: state.blocks,
       stamp: DateTime.now(),
       reminderHour: state.settings.primaryHour,
     );
-    final safeName =
-        e.name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
-    final ok = await downloadText('stressy_$safeName.ics', ics, 'text/calendar');
+    final ok =
+        await downloadText('stressy_examene.ics', ics, 'text/calendar');
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         behavior: SnackBarBehavior.floating,
@@ -404,16 +385,6 @@ class _PlanViewState extends ConsumerState<PlanView> {
   }
 }
 
-class _Dot extends StatelessWidget {
-  final Color color;
-  const _Dot({required this.color});
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      );
-}
 
 /// Selector pentru stilul de invatare (Distribuit / Intensiv).
 class StyleSelector extends StatelessWidget {
@@ -510,10 +481,22 @@ class _ExamSheetState extends State<_ExamSheet> {
   late DateTime _notifyFrom = widget.existing?.notifyFrom ??
       StatsService.dayOnly(DateTime.now());
 
+  // pentru sincronizarea cu Note
+  late int _year = widget.existing?.year ?? 1;
+  late int _semester = widget.existing?.semester ?? 1;
+  late int _credits = widget.existing?.credits ?? 0;
+  late final _gradeCtrl = TextEditingController(
+      text: widget.existing?.grade?.toString() ?? '');
+  late final _subjectCtrl =
+      TextEditingController(text: widget.existing?.subject ?? '');
+  late int _weight = widget.existing?.weightPercent ?? 100;
+
   @override
   void dispose() {
     _ctrl.dispose();
     _customCtrl.dispose();
+    _gradeCtrl.dispose();
+    _subjectCtrl.dispose();
     super.dispose();
   }
 
@@ -744,6 +727,88 @@ class _ExamSheetState extends State<_ExamSheet> {
                 ],
               ),
             ),
+            const SizedBox(height: 18),
+            // --- pentru sectiunea Note ---
+            _lbl('APARE LA NOTE'),
+            const SizedBox(height: 8),
+            Neu(
+              small: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Materie (curs) — lasă gol dacă e o singură notă',
+                      style:
+                          TextStyle(fontSize: 11, color: Silk.onSurfaceVar)),
+                  const SizedBox(height: 6),
+                  NeuInset(
+                    radius: 12,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                    child: TextField(
+                      controller: _subjectCtrl,
+                      decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          hintText: 'ex. Programare (grupează examenele)'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text('Cât contează în notă:',
+                          style: TextStyle(color: Silk.onSurfaceVar)),
+                      const Spacer(),
+                      _miniStep('', _weight,
+                          (d) => setState(() =>
+                              _weight = (_weight + d * 5).clamp(5, 100))),
+                      Text(' %',
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                  const Divider(color: Color(0x11000000)),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _miniStep('An', _year,
+                          (d) => setState(() => _year = (_year + d).clamp(1, 6))),
+                      Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text('Sem ', style: TextStyle(color: Silk.onSurfaceVar)),
+                        _semMini(1),
+                        const SizedBox(width: 6),
+                        _semMini(2),
+                      ]),
+                      _miniStep('Credite', _credits,
+                          (d) => setState(
+                              () => _credits = (_credits + d).clamp(0, 60))),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text('Nota (dacă ai luat-o):',
+                          style: TextStyle(color: Silk.onSurfaceVar)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: NeuInset(
+                          radius: 12,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 2),
+                          child: TextField(
+                            controller: _gradeCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: const InputDecoration(
+                                border: InputBorder.none, hintText: 'ex. 9.50'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 24),
             NeuButton(
               filled: true,
@@ -766,6 +831,13 @@ class _ExamSheetState extends State<_ExamSheet> {
                   studyStyle: widget.initialStyle,
                   result: widget.existing?.result ?? ExamResult.pending,
                   colorValue: _color,
+                  year: _year,
+                  semester: _semester,
+                  credits: _credits,
+                  grade: double.tryParse(
+                      _gradeCtrl.text.trim().replaceAll(',', '.')),
+                  subject: _subjectCtrl.text.trim(),
+                  weightPercent: _weight,
                 ));
               },
               child: Text(editing ? 'Salvează modificările' : 'Salvează examenul',
@@ -803,6 +875,48 @@ class _ExamSheetState extends State<_ExamSheet> {
           letterSpacing: 1,
           fontWeight: FontWeight.w800,
           color: Silk.onSurfaceVar));
+
+  Widget _miniStep(String label, int value, ValueChanged<int> onDelta) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$label ', style: TextStyle(color: Silk.onSurfaceVar)),
+          GestureDetector(
+              onTap: () => onDelta(-1),
+              child: const Icon(Icons.remove_circle_outline,
+                  size: 20, color: Silk.primary)),
+          SizedBox(
+              width: 24,
+              child: Text('$value',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w800))),
+          GestureDetector(
+              onTap: () => onDelta(1),
+              child: const Icon(Icons.add_circle_outline,
+                  size: 20, color: Silk.primary)),
+        ],
+      );
+
+  Widget _semMini(int s) {
+    final sel = _semester == s;
+    return GestureDetector(
+      onTap: () => setState(() => _semester = s),
+      child: Container(
+        width: 28,
+        height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: sel ? Silk.primary : Silk.bg,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: sel ? null : Silk.raisedSoft(),
+        ),
+        child: Text('$s',
+            style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                color: sel ? Colors.white : Silk.onSurfaceVar)),
+      ),
+    );
+  }
 
   Widget _pill(String label, bool selected, VoidCallback onTap) =>
       GestureDetector(

@@ -60,6 +60,19 @@ class Exam {
   /// Culoarea examenului pe calendar (ARGB int).
   final int colorValue;
 
+  // --- pentru sincronizarea cu sectiunea Note ---
+  final int year;
+  final int semester;
+  final int credits;
+  final double? grade; // nota obtinuta (null = inca nesustinut)
+
+  /// Materia (cursul). Daca e gol, examenul e o nota de sine statatoare.
+  /// Mai multe examene cu aceeasi materie se combina intr-o nota ponderata.
+  final String subject;
+
+  /// Cat conteaza acest examen in nota materiei (%).
+  final int weightPercent;
+
   const Exam({
     required this.id,
     required this.name,
@@ -72,6 +85,12 @@ class Exam {
     this.studyStyle = StudyStyle.spaced,
     this.result = ExamResult.pending,
     this.colorValue = 0xFFE5484D,
+    this.year = 1,
+    this.semester = 1,
+    this.credits = 0,
+    this.grade,
+    this.subject = '',
+    this.weightPercent = 100,
   });
 
   /// Eticheta de tip pentru afisare (foloseste customLabel la "altele").
@@ -97,6 +116,13 @@ class Exam {
     StudyStyle? studyStyle,
     ExamResult? result,
     int? colorValue,
+    int? year,
+    int? semester,
+    int? credits,
+    double? grade,
+    bool clearGrade = false,
+    String? subject,
+    int? weightPercent,
   }) =>
       Exam(
         id: id,
@@ -110,6 +136,12 @@ class Exam {
         studyStyle: studyStyle ?? this.studyStyle,
         result: result ?? this.result,
         colorValue: colorValue ?? this.colorValue,
+        year: year ?? this.year,
+        semester: semester ?? this.semester,
+        credits: credits ?? this.credits,
+        grade: clearGrade ? null : (grade ?? this.grade),
+        subject: subject ?? this.subject,
+        weightPercent: weightPercent ?? this.weightPercent,
       );
 
   Map<String, dynamic> toJson() => {
@@ -124,6 +156,12 @@ class Exam {
         'studyStyle': studyStyle.index,
         'result': result.index,
         'colorValue': colorValue,
+        'year': year,
+        'semester': semester,
+        'credits': credits,
+        'grade': grade,
+        'subject': subject,
+        'weightPercent': weightPercent,
       };
 
   factory Exam.fromJson(Map<String, dynamic> j) => Exam(
@@ -144,5 +182,11 @@ class Exam {
         result: ExamResult.values[((j['result'] as num?)?.toInt() ?? 0)
             .clamp(0, ExamResult.values.length - 1)],
         colorValue: (j['colorValue'] as num?)?.toInt() ?? 0xFFE5484D,
+        year: (j['year'] as num?)?.toInt() ?? 1,
+        semester: (j['semester'] as num?)?.toInt() ?? 1,
+        credits: (j['credits'] as num?)?.toInt() ?? 0,
+        grade: (j['grade'] as num?)?.toDouble(),
+        subject: j['subject'] as String? ?? '',
+        weightPercent: (j['weightPercent'] as num?)?.toInt() ?? 100,
       );
 }

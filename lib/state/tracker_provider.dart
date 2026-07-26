@@ -269,13 +269,15 @@ class TrackerController extends StateNotifier<TrackerState> {
   Future<void> addExam(Exam exam) async {
     final exams = [...state.exams, exam];
     final blocks = [...state.blocks, ..._examBlocks(exam)];
+    final grades = _rebuildExamGrades(exams);
     await _storage.saveExams(exams);
     await _storage.saveBlocks(blocks);
-    state = state.copyWith(exams: exams, blocks: blocks);
+    await _storage.saveGrades(grades);
+    state = state.copyWith(exams: exams, blocks: blocks, grades: grades);
     _syncNotifications();
   }
 
-  /// Editeaza un examen: inlocuieste datele + regenereaza blocurile lui.
+  /// Editeaza un examen: inlocuieste datele + regenereaza blocurile + notele.
   Future<void> updateExam(Exam updated) async {
     final exams = [...state.exams];
     final i = exams.indexWhere((x) => x.id == updated.id);
@@ -284,10 +286,50 @@ class TrackerController extends StateNotifier<TrackerState> {
     final kept =
         state.blocks.where((b) => b.examId != updated.id).toList();
     final blocks = [...kept, ..._examBlocks(updated)];
+    final grades = _rebuildExamGrades(exams);
     await _storage.saveExams(exams);
     await _storage.saveBlocks(blocks);
-    state = state.copyWith(exams: exams, blocks: blocks);
+    await _storage.saveGrades(grades);
+    state = state.copyWith(exams: exams, blocks: blocks, grades: grades);
     _syncNotifications();
+  }
+
+  /// Reconstruieste notele din examene: grupeaza examenele pe materie si le
+  /// combina intr-o singura nota ponderata (fiecare examen = componenta %).
+  /// Materie goala => nota separata (grupata dupa numele examenului).
+  List<SubjectGrade> _rebuildExamGrades(List<Exam> exams) {
+    // pastreaza notele adaugate manual (id-uri fara prefix 'exam_')
+    final kept = state.grades.where((g) => !g.id.startsWith('exam_')).toList();
+
+    final groups = <String, List<Exam>>{};
+    for (final e in exams) {
+      final key =
+          (e.subject.trim().isNotEmpty ? e.subject.trim() : e.name).toLowerCase();
+      groups.putIfAbsent(key, () => []).add(e);
+    }
+
+    final examGrades = <SubjectGrade>[];
+    for (final entry in groups.entries) {
+      final list = entry.value;
+      final first = list.first;
+      final display =
+          first.subject.trim().isNotEmpty ? first.subject.trim() : first.name;
+      final comps = [
+        for (final e in list)
+          if (e.grade != null)
+            GradeComponent(
+                name: e.name, grade: e.grade!, percent: e.weightPercent),
+      ];
+      examGrades.add(SubjectGrade(
+        id: 'exam_${entry.key}',
+        subject: display,
+        year: first.year,
+        semester: first.semester,
+        credits: first.credits,
+        components: comps,
+      ));
+    }
+    return [...kept, ...examGrades];
   }
 
   List<PlannedBlock> _examBlocks(Exam exam) {
@@ -316,11 +358,12 @@ class TrackerController extends StateNotifier<TrackerState> {
 
   Future<void> deleteExam(Exam e) async {
     final exams = [...state.exams]..removeWhere((x) => x.id == e.id);
-    // scoate si blocurile generate din acest examen
     final blocks = state.blocks.where((b) => b.examId != e.id).toList();
+    final grades = _rebuildExamGrades(exams);
     await _storage.saveExams(exams);
     await _storage.saveBlocks(blocks);
-    state = state.copyWith(exams: exams, blocks: blocks);
+    await _storage.saveGrades(grades);
+    state = state.copyWith(exams: exams, blocks: blocks, grades: grades);
     _syncNotifications();
   }
 

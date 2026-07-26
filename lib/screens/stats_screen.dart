@@ -216,12 +216,17 @@ class StatsView extends ConsumerWidget {
   String _time(DateTime d) =>
       '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
+  static const _months = [
+    'ian', 'feb', 'mar', 'apr', 'mai', 'iun',
+    'iul', 'aug', 'sep', 'oct', 'noi', 'dec'
+  ];
+
   String _dayLabel(DateTime d) {
     final now = StatsService.dayOnly(DateTime.now());
     final diff = now.difference(d).inDays;
     if (diff == 0) return 'Azi';
     if (diff == 1) return 'Ieri';
-    return '${d.day}.${d.month}.${d.year}';
+    return '${d.day} ${_months[d.month - 1]} ${d.year}';
   }
 }
 
